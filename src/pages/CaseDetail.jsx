@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Edit, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Edit, Trash2, Clock, Calendar, Wrench } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import CaseForm from '@/components/cases/CaseForm';
@@ -45,7 +45,7 @@ export default function CaseDetail() {
 
   const handleUpdate = async (data) => {
     await base44.entities.Case.update(id, data);
-    await logActivity('Updated Case', 'Case', id, `${caseData.case_number}: ${data.title}`);
+    await logActivity('Updated Case', 'Case', id, `${caseData.case_number}: ${data.title}`, '', data.asset || caseData.asset || '');
     setEditOpen(false);
     loadData();
   };
@@ -80,6 +80,11 @@ export default function CaseDetail() {
             <span className="text-xs font-mono text-muted-foreground">{caseData.case_number}</span>
             <PriorityBadge priority={caseData.priority} />
             <StatusBadge status={caseData.status} />
+            {caseData.maintenance_window && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                <Wrench className="w-2.5 h-2.5" /> {caseData.maintenance_window}
+              </span>
+            )}
           </div>
           <h1 className="text-lg font-semibold text-foreground">{caseData.title}</h1>
         </div>
@@ -129,8 +134,12 @@ export default function CaseDetail() {
           <div className="text-xs text-foreground">{caseData.assigned_to || '—'}</div>
         </div>
         <div className="bg-card border border-border rounded-lg px-3 py-2">
-          <div className="text-[11px] text-muted-foreground mb-0.5">Created</div>
-          <div className="text-xs text-foreground">{moment(caseData.created_date).format('MMM D, YYYY HH:mm')}</div>
+          <div className="text-[11px] text-muted-foreground mb-0.5 flex items-center gap-1">
+            <Calendar className="w-2.5 h-2.5" /> Est. Completion
+          </div>
+          <div className="text-xs text-foreground">
+            {caseData.estimated_completion ? moment(caseData.estimated_completion).format('MMM D, YYYY') : '—'}
+          </div>
         </div>
       </div>
 
@@ -138,6 +147,15 @@ export default function CaseDetail() {
         <div className="bg-card border border-border rounded-lg px-3 py-2">
           <div className="text-[11px] text-muted-foreground mb-1">Notes</div>
           <div className="text-xs text-foreground whitespace-pre-wrap">{caseData.notes}</div>
+        </div>
+      )}
+
+      {caseData.resolution_notes && (
+        <div className="bg-card border border-emerald-500/20 rounded-lg px-3 py-2">
+          <div className="text-[11px] text-emerald-400 mb-1 flex items-center gap-1">
+            <AlertTriangle className="w-2.5 h-2.5" /> Resolution Notes
+          </div>
+          <div className="text-xs text-foreground whitespace-pre-wrap">{caseData.resolution_notes}</div>
         </div>
       )}
 

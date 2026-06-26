@@ -28,6 +28,23 @@
       ],
       "default": "Open"
     },
+    "maintenance_window": {
+      "type": "string",
+      "enum": [
+        "Immediate",
+        "Scheduled",
+        "Emergency",
+        "Planned"
+      ],
+      "default": "Immediate"
+    },
+    "estimated_completion": {
+      "type": "string",
+      "format": "date"
+    },
+    "resolution_notes": {
+      "type": "string"
+    },
     "assigned_to": {
       "type": "string"
     },

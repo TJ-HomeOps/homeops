@@ -20,6 +20,7 @@ import {
 
 const priorities = ['Low', 'Normal', 'High', 'Critical'];
 const statuses = ['Open', 'In Progress', 'Waiting', 'Closed'];
+const maintenanceWindows = ['Immediate', 'Scheduled', 'Emergency', 'Planned'];
 
 export default function Cases() {
   const [cases, setCases] = useState([]);
@@ -30,6 +31,7 @@ export default function Cases() {
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [windowFilter, setWindowFilter] = useState('all');
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function Cases() {
     const caseNumber = await generateCaseNumber();
     const caseData = { ...data, case_number: caseNumber };
     const created = await base44.entities.Case.create(caseData);
-    await logActivity('Created Case', 'Case', created.id, `${caseNumber}: ${data.title}`);
+    await logActivity('Created Case', 'Case', created.id, `${caseNumber}: ${data.title}`, '', data.asset || '');
     setFormOpen(false);
     loadData();
   };
@@ -72,6 +74,7 @@ export default function Cases() {
         !(c.case_number || '').toLowerCase().includes(search.toLowerCase())) return false;
     if (priorityFilter !== 'all' && c.priority !== priorityFilter) return false;
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+    if (windowFilter !== 'all' && c.maintenance_window !== windowFilter) return false;
     return true;
   });
 
@@ -88,7 +91,7 @@ export default function Cases() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-foreground">Cases</h1>
-          <p className="text-xs text-muted-foreground">{cases.length} total cases</p>
+          <p className="text-xs text-muted-foreground">{cases.length} total cases · {filtered.length} shown</p>
         </div>
         <Button onClick={() => setFormOpen(true)} size="sm" className="bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90 h-8 text-xs">
           <Plus className="w-3.5 h-3.5 mr-1.5" /> New Case
@@ -96,7 +99,7 @@ export default function Cases() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
@@ -124,6 +127,15 @@ export default function Cases() {
             {statuses.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={windowFilter} onValueChange={setWindowFilter}>
+          <SelectTrigger className="h-8 w-36 text-xs bg-card border-border">
+            <SelectValue placeholder="Window" />
+          </SelectTrigger>
+          <SelectContent className="bg-navy-800 border-border">
+            <SelectItem value="all" className="text-xs">All Windows</SelectItem>
+            {maintenanceWindows.map(w => <SelectItem key={w} value={w} className="text-xs">{w}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -139,17 +151,18 @@ export default function Cases() {
           }
         />
       ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
+        <div className="bg-card border border-border rounded-lg overflow-hidden overflow-x-auto">
+          <table className="w-full text-xs min-w-[900px]">
             <thead>
               <tr className="border-b border-border bg-accent/30">
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground w-20">Priority</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground w-24">Case #</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Title</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Asset</th>
-                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Project</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Window</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground w-24">Status</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Assigned</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Est. Completion</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground w-24">Updated</th>
               </tr>
             </thead>
@@ -164,11 +177,12 @@ export default function Cases() {
                   <td className="px-3 py-2 text-muted-foreground">
                     {c.asset && assetMap[c.asset] ? assetMap[c.asset].name : '—'}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {c.project && projectMap[c.project] ? projectMap[c.project].name : '—'}
-                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{c.maintenance_window || '—'}</td>
                   <td className="px-3 py-2"><StatusBadge status={c.status} /></td>
                   <td className="px-3 py-2 text-muted-foreground">{c.assigned_to || '—'}</td>
+                  <td className="px-3 py-2 text-muted-foreground text-[11px]">
+                    {c.estimated_completion ? moment(c.estimated_completion).format('MMM D, YYYY') : '—'}
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground text-[11px]">{moment(c.updated_date || c.created_date).fromNow()}</td>
                 </tr>
               ))}

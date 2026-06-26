@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Server, Plus, Search, Filter } from 'lucide-react';
+import { Server, Plus, Search } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
+import HealthBadge from '@/components/shared/HealthBadge';
 import EmptyState from '@/components/shared/EmptyState';
 import AssetForm from '@/components/assets/AssetForm';
 import { logActivity } from '@/lib/activityLogger';
@@ -16,7 +17,9 @@ import {
 import { Button } from '@/components/ui/button';
 
 const assetTypes = ['LXC', 'VM', 'Docker Container', 'Physical Server', 'NAS', 'Network Device', 'Switch', 'Firewall', 'Router', 'UPS', 'Other'];
-const assetStatuses = ['Online', 'Offline', 'Maintenance', 'Provisioning', 'Decommissioned'];
+const assetStatuses = ['Online', 'Offline', 'Maintenance', 'Unknown'];
+const healthLevels = ['Healthy', 'Warning', 'Critical'];
+const assetRoles = ['Infrastructure', 'Network', 'Security', 'Media', 'Storage', 'Development', 'Automation', 'Monitoring', 'Other'];
 
 export default function Assets() {
   const [assets, setAssets] = useState([]);
@@ -26,6 +29,8 @@ export default function Assets() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [healthFilter, setHealthFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
@@ -51,7 +56,7 @@ export default function Assets() {
 
   const handleCreate = async (data) => {
     const asset = await base44.entities.Asset.create(data);
-    await logActivity('Created Asset', 'Asset', asset.id, data.name);
+    await logActivity('Created Asset', 'Asset', asset.id, data.name, '', asset.id);
     setFormOpen(false);
     loadData();
   };
@@ -64,6 +69,8 @@ export default function Assets() {
         !(a.ip_address || '').toLowerCase().includes(search.toLowerCase())) return false;
     if (typeFilter !== 'all' && a.type !== typeFilter) return false;
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    if (healthFilter !== 'all' && a.health !== healthFilter) return false;
+    if (roleFilter !== 'all' && a.role !== roleFilter) return false;
     return true;
   });
 
@@ -80,7 +87,7 @@ export default function Assets() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold text-foreground">Assets</h1>
-          <p className="text-xs text-muted-foreground">{assets.length} total assets</p>
+          <p className="text-xs text-muted-foreground">{assets.length} total assets · {filtered.length} shown</p>
         </div>
         <Button onClick={() => setFormOpen(true)} size="sm" className="bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90 h-8 text-xs">
           <Plus className="w-3.5 h-3.5 mr-1.5" /> New Asset
@@ -88,7 +95,7 @@ export default function Assets() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
@@ -99,25 +106,39 @@ export default function Assets() {
           />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-8 w-40 text-xs bg-card border-border">
+          <SelectTrigger className="h-8 w-36 text-xs bg-card border-border">
             <SelectValue placeholder="Type" />
           </SelectTrigger>
           <SelectContent className="bg-navy-800 border-border">
             <SelectItem value="all" className="text-xs">All Types</SelectItem>
-            {assetTypes.map(t => (
-              <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
-            ))}
+            {assetTypes.map(t => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="h-8 w-36 text-xs bg-card border-border">
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent className="bg-navy-800 border-border">
+            <SelectItem value="all" className="text-xs">All Roles</SelectItem>
+            {assetRoles.map(r => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 w-36 text-xs bg-card border-border">
+          <SelectTrigger className="h-8 w-32 text-xs bg-card border-border">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent className="bg-navy-800 border-border">
             <SelectItem value="all" className="text-xs">All Status</SelectItem>
-            {assetStatuses.map(s => (
-              <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
-            ))}
+            {assetStatuses.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={healthFilter} onValueChange={setHealthFilter}>
+          <SelectTrigger className="h-8 w-32 text-xs bg-card border-border">
+            <SelectValue placeholder="Health" />
+          </SelectTrigger>
+          <SelectContent className="bg-navy-800 border-border">
+            <SelectItem value="all" className="text-xs">All Health</SelectItem>
+            {healthLevels.map(h => <SelectItem key={h} value={h} className="text-xs">{h}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -135,16 +156,18 @@ export default function Assets() {
           }
         />
       ) : (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
+        <div className="bg-card border border-border rounded-lg overflow-hidden overflow-x-auto">
+          <table className="w-full text-xs min-w-[800px]">
             <thead>
               <tr className="border-b border-border bg-accent/30">
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Name</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Type</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Role</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Hostname</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">IP Address</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Project</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Health</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -156,6 +179,7 @@ export default function Assets() {
                     </Link>
                   </td>
                   <td className="px-3 py-2 text-muted-foreground font-mono text-[11px]">{asset.type}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{asset.role || 'Other'}</td>
                   <td className="px-3 py-2 font-mono text-muted-foreground">{asset.hostname || '—'}</td>
                   <td className="px-3 py-2 font-mono text-muted-foreground">{asset.ip_address || '—'}</td>
                   <td className="px-3 py-2 text-muted-foreground">
@@ -164,6 +188,7 @@ export default function Assets() {
                       : '—'}
                   </td>
                   <td className="px-3 py-2"><StatusBadge status={asset.status} /></td>
+                  <td className="px-3 py-2"><HealthBadge health={asset.health} /></td>
                 </tr>
               ))}
             </tbody>
@@ -176,7 +201,7 @@ export default function Assets() {
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">New Asset</DialogTitle>
           </DialogHeader>
-          <AssetForm projects={projects} onSubmit={handleCreate} onCancel={() => setFormOpen(false)} />
+          <AssetForm projects={projects} allAssets={assets} onSubmit={handleCreate} onCancel={() => setFormOpen(false)} />
         </DialogContent>
       </Dialog>
     </div>

@@ -33,10 +33,33 @@
         "Online",
         "Offline",
         "Maintenance",
-        "Provisioning",
-        "Decommissioned"
+        "Unknown"
       ],
       "default": "Online"
+    },
+    "health": {
+      "type": "string",
+      "enum": [
+        "Healthy",
+        "Warning",
+        "Critical"
+      ],
+      "default": "Healthy"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "Infrastructure",
+        "Network",
+        "Security",
+        "Media",
+        "Storage",
+        "Development",
+        "Automation",
+        "Monitoring",
+        "Other"
+      ],
+      "default": "Other"
     },
     "project": {
       "type": "string",
@@ -51,6 +74,15 @@
       "items": {
         "type": "string"
       }
+    },
+    "related_assets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
     }
   },
   "required": [

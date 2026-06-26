@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Server, ArrowLeft, Edit, Trash2, Plus, Clock } from 'lucide-react';
+import { Server, ArrowLeft, Edit, Trash2, Save, Link2, Activity, FileText, BookOpen, AlertTriangle, Cpu } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
+import HealthBadge from '@/components/shared/HealthBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import AssetForm from '@/components/assets/AssetForm';
+import AssetTimeline from '@/components/assets/AssetTimeline';
+import RelatedAssets from '@/components/assets/RelatedAssets';
+import FutureIntegrations from '@/components/assets/FutureIntegrations';
 import { logActivity } from '@/lib/activityLogger';
-import moment from 'moment';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import moment from 'moment';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
@@ -17,50 +21,80 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 
+function SectionCard({ title, icon: Icon, count, children, action }) {
+  return (
+    <div className="bg-card border border-border rounded-lg">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-1.5">
+          {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground" />}
+          <h3 className="text-xs font-semibold text-foreground">{title}</h3>
+          {count !== undefined && <span className="text-[10px] text-muted-foreground">({count})</span>}
+        </div>
+        {action}
+      </div>
+      <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
 export default function AssetDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [asset, setAsset] = useState(null);
+  const [allAssets, setAllAssets] = useState([]);
   const [project, setProject] = useState(null);
+  const [projects, setProjects] = useState([]);
   const [cases, setCases] = useState([]);
   const [docs, setDocs] = useState([]);
   const [runbooks, setRunbooks] = useState([]);
-  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
-  const [projects, setProjects] = useState([]);
+  const [notesText, setNotesText] = useState('');
+  const [notesDirty, setNotesDirty] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [id]);
+  useEffect(() => { loadData(); }, [id]);
 
   const loadData = async () => {
-    const [a, allProjects] = await Promise.all([
+    setLoading(true);
+    const [a, allProj, allAssets] = await Promise.all([
       base44.entities.Asset.get(id),
-      base44.entities.Project.list()
+      base44.entities.Project.list(),
+      base44.entities.Asset.list()
     ]);
     setAsset(a);
-    setProjects(allProjects);
+    setProjects(allProj);
+    setAllAssets(allAssets);
+    setNotesText(a.notes || '');
+    setNotesDirty(false);
     if (a.project) {
-      const proj = allProjects.find(p => p.id === a.project);
-      setProject(proj || null);
+      setProject(allProj.find(p => p.id === a.project) || null);
+    } else {
+      setProject(null);
     }
-    const [c, d, r, act] = await Promise.all([
+    const [c, d, r] = await Promise.all([
       base44.entities.Case.filter({ asset: id }),
       base44.entities.Documentation.filter({ related_asset: id }),
-      base44.entities.Runbook.filter({ asset: id }),
-      base44.entities.ActivityLog.filter({ entity_type: 'Asset', entity_id: id }, '-created_date', 10)
+      base44.entities.Runbook.filter({ asset: id })
     ]);
     setCases(c);
     setDocs(d);
     setRunbooks(r);
-    setActivities(act);
     setLoading(false);
   };
 
   const handleUpdate = async (data) => {
+    const oldHealth = asset.health;
+    const oldProject = asset.project;
     await base44.entities.Asset.update(id, data);
-    await logActivity('Updated Asset', 'Asset', id, data.name);
+    await logActivity('Updated Asset', 'Asset', id, data.name, '', id);
+    if (data.health && data.health !== oldHealth) {
+      await logActivity(`Health Changed: ${oldHealth} → ${data.health}`, 'Asset', id, data.name, '', id);
+    }
+    if (data.project && data.project !== oldProject) {
+      const newProj = projects.find(p => p.id === data.project);
+      await logActivity(`Project Changed`, 'Asset', id, data.name, `Now in ${newProj?.name || 'Unknown'}`, id);
+    }
     setEditOpen(false);
     loadData();
   };
@@ -71,20 +105,46 @@ export default function AssetDetail() {
     navigate('/assets');
   };
 
+  const handleSaveNotes = async () => {
+    setSavingNotes(true);
+    await base44.entities.Asset.update(id, { notes: notesText });
+    await logActivity('Updated Notes', 'Asset', id, asset.name, '', id);
+    setSavingNotes(false);
+    setNotesDirty(false);
+  };
+
+  const handleLinkAsset = async (assetId) => {
+    const updated = [...(asset.related_assets || []), assetId];
+    await base44.entities.Asset.update(id, { related_assets: updated });
+    const linkedAsset = allAssets.find(a => a.id === assetId);
+    await logActivity(`Linked Asset: ${linkedAsset?.name || ''}`, 'Asset', id, asset.name, '', id);
+    loadData();
+  };
+
+  const handleUnlinkAsset = async (assetId) => {
+    const updated = (asset.related_assets || []).filter(aid => aid !== assetId);
+    await base44.entities.Asset.update(id, { related_assets: updated });
+    const unlinkedAsset = allAssets.find(a => a.id === assetId);
+    await logActivity(`Unlinked Asset: ${unlinkedAsset?.name || ''}`, 'Asset', id, asset.name, '', id);
+    loadData();
+  };
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" /></div>;
   }
 
   if (!asset) {
     return <div className="text-sm text-muted-foreground text-center py-16">Asset not found</div>;
   }
 
+  const healthDescription = asset.health === 'Critical'
+    ? 'Asset is in a critical state and requires immediate attention.'
+    : asset.health === 'Warning'
+    ? 'Asset is operational but has warnings that should be addressed.'
+    : 'Asset is operating normally with no active warnings.';
+
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-3 max-w-5xl">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2">
         <Link to="/assets" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
@@ -104,7 +164,9 @@ export default function AssetDetail() {
             <h1 className="text-lg font-semibold text-foreground">{asset.name}</h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[11px] font-mono text-muted-foreground">{asset.type}</span>
+              {asset.role && <span className="text-[11px] text-muted-foreground">· {asset.role}</span>}
               <StatusBadge status={asset.status} />
+              <HealthBadge health={asset.health} />
             </div>
           </div>
         </div>
@@ -134,133 +196,185 @@ export default function AssetDetail() {
         </div>
       </div>
 
-      {/* Info grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Hostname', value: asset.hostname || '—', mono: true },
-          { label: 'IP Address', value: asset.ip_address || '—', mono: true },
-          { label: 'Project', value: project ? project.name : '—', link: project ? `/projects/${project.id}` : null },
-          { label: 'Created', value: moment(asset.created_date).format('MMM D, YYYY') },
-        ].map((item) => (
-          <div key={item.label} className="bg-card border border-border rounded-lg px-3 py-2">
-            <div className="text-[11px] text-muted-foreground mb-0.5">{item.label}</div>
-            {item.link ? (
-              <Link to={item.link} className="text-xs text-primary hover:underline">{item.value}</Link>
+      {/* General Section */}
+      <SectionCard title="General" icon={Server}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <div className="text-[11px] text-muted-foreground">Hostname</div>
+            <div className="text-xs text-foreground font-mono">{asset.hostname || '—'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">IP Address</div>
+            <div className="text-xs text-foreground font-mono">{asset.ip_address || '—'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Role</div>
+            <div className="text-xs text-foreground">{asset.role || 'Other'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Project</div>
+            {project ? (
+              <Link to={`/projects/${project.id}`} className="text-xs text-primary hover:underline">{project.name}</Link>
             ) : (
-              <div className={`text-xs text-foreground ${item.mono ? 'font-mono' : ''}`}>{item.value}</div>
+              <div className="text-xs text-foreground">—</div>
             )}
           </div>
-        ))}
-      </div>
-
-      {asset.description && (
-        <div className="bg-card border border-border rounded-lg px-3 py-2">
-          <div className="text-[11px] text-muted-foreground mb-1">Description</div>
-          <div className="text-xs text-foreground">{asset.description}</div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Created</div>
+            <div className="text-xs text-foreground">{moment(asset.created_date).format('MMM D, YYYY')}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Last Updated</div>
+            <div className="text-xs text-foreground">{moment(asset.updated_date || asset.created_date).fromNow()}</div>
+          </div>
         </div>
-      )}
+        {asset.description && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <div className="text-[11px] text-muted-foreground mb-0.5">Description</div>
+            <div className="text-xs text-foreground">{asset.description}</div>
+          </div>
+        )}
+        {asset.tags && asset.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {asset.tags.map(tag => (
+              <span key={tag} className="px-1.5 py-0.5 rounded bg-accent text-[11px] text-foreground border border-border">{tag}</span>
+            ))}
+          </div>
+        )}
+      </SectionCard>
 
-      {asset.tags && asset.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {asset.tags.map(tag => (
-            <span key={tag} className="px-1.5 py-0.5 rounded bg-accent text-[11px] text-foreground border border-border">{tag}</span>
-          ))}
+      {/* Health Section */}
+      <SectionCard title="Health" icon={Activity}>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="text-[11px] text-muted-foreground mb-0.5">Status</div>
+              <StatusBadge status={asset.status} />
+            </div>
+            <div>
+              <div className="text-[11px] text-muted-foreground mb-0.5">Health</div>
+              <HealthBadge health={asset.health} />
+            </div>
+          </div>
+          <div className="flex-1 text-xs text-muted-foreground border-l border-border pl-3">
+            {healthDescription}
+          </div>
         </div>
-      )}
+      </SectionCard>
 
-      {/* Tabs */}
-      <Tabs defaultValue="cases" className="mt-2">
-        <TabsList className="bg-card border border-border h-8">
-          <TabsTrigger value="cases" className="text-xs h-6 data-[state=active]:bg-accent">Cases ({cases.length})</TabsTrigger>
-          <TabsTrigger value="docs" className="text-xs h-6 data-[state=active]:bg-accent">Docs ({docs.length})</TabsTrigger>
-          <TabsTrigger value="runbooks" className="text-xs h-6 data-[state=active]:bg-accent">Runbooks ({runbooks.length})</TabsTrigger>
-          <TabsTrigger value="activity" className="text-xs h-6 data-[state=active]:bg-accent">Activity</TabsTrigger>
-        </TabsList>
+      {/* Future Integrations */}
+      <SectionCard title="Future Integrations" icon={Cpu}>
+        <FutureIntegrations />
+      </SectionCard>
 
-        <TabsContent value="cases">
-          {cases.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-8">No cases for this asset</div>
-          ) : (
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-accent/30">
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Priority</th>
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Case #</th>
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Title</th>
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {cases.map(c => (
-                    <tr key={c.id} className="hover:bg-accent/30">
-                      <td className="px-3 py-2"><PriorityBadge priority={c.priority} /></td>
-                      <td className="px-3 py-2 font-mono text-muted-foreground">{c.case_number}</td>
-                      <td className="px-3 py-2"><Link to={`/cases/${c.id}`} className="text-foreground hover:text-primary">{c.title}</Link></td>
-                      <td className="px-3 py-2"><StatusBadge status={c.status} /></td>
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* Left: Cases, Docs, Runbooks, Timeline */}
+        <div className="lg:col-span-2 space-y-3">
+          {/* Cases */}
+          <SectionCard title="Cases" icon={AlertTriangle} count={cases.length}>
+            {cases.length === 0 ? (
+              <div className="text-xs text-muted-foreground text-center py-4">No cases for this asset</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-1.5 font-medium text-muted-foreground">Priority</th>
+                      <th className="text-left py-1.5 font-medium text-muted-foreground">Case #</th>
+                      <th className="text-left py-1.5 font-medium text-muted-foreground">Title</th>
+                      <th className="text-left py-1.5 font-medium text-muted-foreground">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </TabsContent>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {cases.map(c => (
+                      <tr key={c.id} className="hover:bg-accent/30">
+                        <td className="py-1.5"><PriorityBadge priority={c.priority} /></td>
+                        <td className="py-1.5 font-mono text-muted-foreground">{c.case_number}</td>
+                        <td className="py-1.5"><Link to={`/cases/${c.id}`} className="text-foreground hover:text-primary">{c.title}</Link></td>
+                        <td className="py-1.5"><StatusBadge status={c.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
 
-        <TabsContent value="docs">
-          {docs.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-8">No documentation for this asset</div>
-          ) : (
-            <div className="space-y-2">
-              {docs.map(d => (
-                <Link key={d.id} to={`/documentation/${d.id}`} className="block bg-card border border-border rounded-lg px-3 py-2 hover:border-primary/30 transition-colors">
-                  <div className="text-xs text-foreground font-medium">{d.title}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">{moment(d.updated_date || d.created_date).format('MMM D, YYYY')}</div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </TabsContent>
+          {/* Documentation */}
+          <SectionCard title="Documentation" icon={FileText} count={docs.length}>
+            {docs.length === 0 ? (
+              <div className="text-xs text-muted-foreground text-center py-4">No documentation for this asset</div>
+            ) : (
+              <div className="space-y-1">
+                {docs.map(d => (
+                  <Link key={d.id} to={`/documentation/${d.id}`} className="block px-2 py-1.5 rounded-md bg-accent/20 border border-border hover:border-primary/30 transition-colors">
+                    <div className="text-xs text-foreground font-medium">{d.title}</div>
+                    <div className="text-[10px] text-muted-foreground">{moment(d.updated_date || d.created_date).format('MMM D, YYYY')}</div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
-        <TabsContent value="runbooks">
-          {runbooks.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-8">No runbooks for this asset</div>
-          ) : (
-            <div className="space-y-2">
-              {runbooks.map(r => (
-                <Link key={r.id} to={`/runbooks/${r.id}`} className="block bg-card border border-border rounded-lg px-3 py-2 hover:border-primary/30 transition-colors">
-                  <div className="text-xs text-foreground font-medium">{r.name}</div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">{r.description}</div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </TabsContent>
+          {/* Runbooks */}
+          <SectionCard title="Runbooks" icon={BookOpen} count={runbooks.length}>
+            {runbooks.length === 0 ? (
+              <div className="text-xs text-muted-foreground text-center py-4">No runbooks for this asset</div>
+            ) : (
+              <div className="space-y-1">
+                {runbooks.map(r => (
+                  <Link key={r.id} to={`/runbooks/${r.id}`} className="block px-2 py-1.5 rounded-md bg-accent/20 border border-border hover:border-primary/30 transition-colors">
+                    <div className="text-xs text-foreground font-medium">{r.name}</div>
+                    {r.description && <div className="text-[10px] text-muted-foreground">{r.description}</div>}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
-        <TabsContent value="activity">
-          {activities.length === 0 ? (
-            <div className="text-xs text-muted-foreground text-center py-8">No activity recorded</div>
-          ) : (
-            <div className="space-y-0">
-              {activities.map(a => (
-                <div key={a.id} className="flex items-center gap-3 px-3 py-2 border-l-2 border-border ml-2">
-                  <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
-                  <div>
-                    <div className="text-xs text-foreground">{a.action}</div>
-                    <div className="text-[10px] text-muted-foreground">{moment(a.created_date).fromNow()}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+          {/* Activity Timeline */}
+          <SectionCard title="Activity Timeline" icon={Activity}>
+            <AssetTimeline assetId={id} />
+          </SectionCard>
+
+          {/* Notes */}
+          <SectionCard title="Notes" icon={FileText}
+            action={notesDirty && (
+              <Button onClick={handleSaveNotes} size="sm" disabled={savingNotes}
+                className="h-6 text-[11px] bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90 px-2">
+                <Save className="w-3 h-3 mr-1" /> {savingNotes ? 'Saving...' : 'Save'}
+              </Button>
+            )}
+          >
+            <Textarea
+              value={notesText}
+              onChange={(e) => { setNotesText(e.target.value); setNotesDirty(true); }}
+              placeholder="Add internal notes for this asset..."
+              className="text-xs bg-navy-900 border-border min-h-[80px] resize-y"
+            />
+          </SectionCard>
+        </div>
+
+        {/* Right: Related Assets */}
+        <div className="space-y-3">
+          <SectionCard title="Related Assets" icon={Link2} count={(asset.related_assets || []).length}>
+            <RelatedAssets
+              asset={asset}
+              allAssets={allAssets}
+              onLink={handleLinkAsset}
+              onUnlink={handleUnlinkAsset}
+            />
+          </SectionCard>
+        </div>
+      </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="bg-navy-800 border-border sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">Edit Asset</DialogTitle>
           </DialogHeader>
-          <AssetForm asset={asset} projects={projects} onSubmit={handleUpdate} onCancel={() => setEditOpen(false)} />
+          <AssetForm asset={asset} projects={projects} allAssets={allAssets} onSubmit={handleUpdate} onCancel={() => setEditOpen(false)} />
         </DialogContent>
       </Dialog>
     </div>

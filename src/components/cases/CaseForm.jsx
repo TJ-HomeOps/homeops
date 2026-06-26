@@ -9,23 +9,30 @@ import {
 
 const priorities = ['Low', 'Normal', 'High', 'Critical'];
 const statuses = ['Open', 'In Progress', 'Waiting', 'Closed'];
+const maintenanceWindows = ['Immediate', 'Scheduled', 'Emergency', 'Planned'];
 
 export default function CaseForm({ caseData, assets, projects, onSubmit, onCancel }) {
   const [form, setForm] = useState({
     title: caseData?.title || '',
     priority: caseData?.priority || 'Normal',
     status: caseData?.status || 'Open',
+    maintenance_window: caseData?.maintenance_window || 'Immediate',
+    estimated_completion: caseData?.estimated_completion || '',
     assigned_to: caseData?.assigned_to || '',
     asset: caseData?.asset || '',
     project: caseData?.project || '',
     notes: caseData?.notes || '',
+    resolution_notes: caseData?.resolution_notes || '',
   });
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await onSubmit(form);
+    const cleanForm = { ...form };
+    if (cleanForm.asset === 'none') cleanForm.asset = '';
+    if (cleanForm.project === 'none') cleanForm.project = '';
+    await onSubmit(cleanForm);
     setSaving(false);
   };
 
@@ -60,8 +67,24 @@ export default function CaseForm({ caseData, assets, projects, onSubmit, onCance
           </Select>
         </div>
         <div>
+          <Label className="text-xs text-muted-foreground">Maintenance Window</Label>
+          <Select value={form.maintenance_window} onValueChange={(v) => setForm({ ...form, maintenance_window: v })}>
+            <SelectTrigger className="h-8 text-xs bg-navy-900 border-border mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-navy-800 border-border">
+              {maintenanceWindows.map(w => <SelectItem key={w} value={w} className="text-xs">{w}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Estimated Completion</Label>
+          <Input type="date" value={form.estimated_completion} onChange={(e) => setForm({ ...form, estimated_completion: e.target.value })}
+            className="h-8 text-xs bg-navy-900 border-border mt-1" />
+        </div>
+        <div>
           <Label className="text-xs text-muted-foreground">Asset</Label>
-          <Select value={form.asset} onValueChange={(v) => setForm({ ...form, asset: v })}>
+          <Select value={form.asset || 'none'} onValueChange={(v) => setForm({ ...form, asset: v })}>
             <SelectTrigger className="h-8 text-xs bg-navy-900 border-border mt-1">
               <SelectValue placeholder="None" />
             </SelectTrigger>
@@ -73,7 +96,7 @@ export default function CaseForm({ caseData, assets, projects, onSubmit, onCance
         </div>
         <div>
           <Label className="text-xs text-muted-foreground">Project</Label>
-          <Select value={form.project} onValueChange={(v) => setForm({ ...form, project: v })}>
+          <Select value={form.project || 'none'} onValueChange={(v) => setForm({ ...form, project: v })}>
             <SelectTrigger className="h-8 text-xs bg-navy-900 border-border mt-1">
               <SelectValue placeholder="None" />
             </SelectTrigger>
@@ -92,7 +115,12 @@ export default function CaseForm({ caseData, assets, projects, onSubmit, onCance
       <div>
         <Label className="text-xs text-muted-foreground">Notes</Label>
         <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          className="text-xs bg-navy-900 border-border mt-1 min-h-[60px]" />
+          className="text-xs bg-navy-900 border-border mt-1 min-h-[50px]" />
+      </div>
+      <div>
+        <Label className="text-xs text-muted-foreground">Resolution Notes</Label>
+        <Textarea value={form.resolution_notes} onChange={(e) => setForm({ ...form, resolution_notes: e.target.value })}
+          className="text-xs bg-navy-900 border-border mt-1 min-h-[50px]" placeholder="Document the resolution once the case is closed..." />
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" onClick={onCancel} variant="outline" size="sm" className="h-8 text-xs border-border">Cancel</Button>
