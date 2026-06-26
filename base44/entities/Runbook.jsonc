@@ -1,0 +1,35 @@
+{
+  "name": "Runbook",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "checklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "completed": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "asset": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Asset"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

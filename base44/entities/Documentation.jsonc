@@ -1,0 +1,20 @@
+{
+  "name": "Documentation",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "related_asset": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Asset"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

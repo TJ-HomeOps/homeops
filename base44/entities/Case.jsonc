@@ -1,0 +1,51 @@
+{
+  "name": "Case",
+  "type": "object",
+  "properties": {
+    "case_number": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "Low",
+        "Normal",
+        "High",
+        "Critical"
+      ],
+      "default": "Normal"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Open",
+        "In Progress",
+        "Waiting",
+        "Closed"
+      ],
+      "default": "Open"
+    },
+    "assigned_to": {
+      "type": "string"
+    },
+    "asset": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Asset"
+    },
+    "project": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Project"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

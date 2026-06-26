@@ -1,0 +1,60 @@
+{
+  "name": "Asset",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "LXC",
+        "VM",
+        "Docker Container",
+        "Physical Server",
+        "NAS",
+        "Network Device",
+        "Switch",
+        "Firewall",
+        "Router",
+        "UPS",
+        "Other"
+      ]
+    },
+    "hostname": {
+      "type": "string"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Online",
+        "Offline",
+        "Maintenance",
+        "Provisioning",
+        "Decommissioned"
+      ],
+      "default": "Online"
+    },
+    "project": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Project"
+    },
+    "description": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ]
+}
