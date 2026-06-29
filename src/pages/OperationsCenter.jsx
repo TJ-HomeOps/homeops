@@ -3,7 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import {
   Server, AlertTriangle, Activity, Wrench, RefreshCw,
-  Plus, ArrowRight, Clock, CheckCircle, AlertOctagon, FolderKanban
+  Plus, ArrowRight, Clock, CheckCircle, AlertOctagon, FolderKanban,
+  Cloud, HardDrive, Monitor, Box, Cpu, Zap
 } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
@@ -31,6 +32,8 @@ export default function OperationsCenter() {
   const [projects, setProjects] = useState([]);
   const [cases, setCases] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
@@ -40,13 +43,17 @@ export default function OperationsCenter() {
       base44.entities.Project.list(),
       base44.entities.Case.list(),
       base44.entities.ActivityLog.list('-created_date', 20),
-      base44.auth.me()
-    ]).then(([a, p, c, act, u]) => {
+      base44.auth.me(),
+      base44.entities.InfrastructureProvider.list(),
+      base44.entities.InfrastructureNode.list()
+    ]).then(([a, p, c, act, u, prov, n]) => {
       setAssets(a);
       setProjects(p);
       setCases(c);
       setActivities(act);
       setUser(u);
+      setProviders(prov);
+      setNodes(n);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -67,6 +74,17 @@ export default function OperationsCenter() {
   const criticalAssets = assets.filter(a => a.health === 'Critical');
   const maintenanceAssets = assets.filter(a => a.status === 'Maintenance');
   const infraHealth = calculateInfrastructureHealth(assets, cases);
+
+  const connectedProviders = providers.filter(p => p.status === 'Connected');
+  const healthyProviders = providers.filter(p => p.health === 'Healthy');
+  const errorProviders = providers.filter(p => p.health === 'Error');
+  const onlineNodes = nodes.filter(n => n.status === 'Online');
+  const runningVMs = nodes.reduce((sum, n) => sum + (n.running_vms || 0), 0);
+  const runningLXCs = nodes.reduce((sum, n) => sum + (n.running_lxcs || 0), 0);
+  const lastProviderSync = providers
+    .filter(p => p.last_sync)
+    .sort((a, b) => new Date(b.last_sync) - new Date(a.last_sync))[0]?.last_sync;
+  const syncErrors = providers.flatMap(p => p.sync_errors || []);
 
   const lastSync = activities[0]?.created_date;
   const greeting = () => {
@@ -107,6 +125,68 @@ export default function OperationsCenter() {
               color="bg-sky-500/15 text-sky-400" link="/cases" />
             <StatTile icon={Wrench} label="Maintenance Today" value={maintenanceAssets.length}
               color="bg-purple-500/15 text-purple-400" link="/assets" />
+          </div>
+        </div>
+      </div>
+
+      {/* Cluster Status */}
+      <div className="bg-card border border-border rounded-lg">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Cloud className="w-3.5 h-3.5 text-ops-cyan" />
+            <h2 className="text-xs font-semibold text-foreground">Cluster Status</h2>
+          </div>
+          <Link to="/providers" className="text-[11px] text-primary hover:underline">View All</Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-border">
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Providers</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-semibold text-foreground">{connectedProviders.length}</span>
+              <span className="text-[11px] text-muted-foreground">/ {providers.length}</span>
+            </div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Health</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-semibold text-emerald-400">{healthyProviders.length}</span>
+              {errorProviders.length > 0 && <span className="text-[11px] text-red-400">{errorProviders.length} err</span>}
+            </div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Nodes Online</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-semibold text-ops-cyan">{onlineNodes.length}</span>
+              <span className="text-[11px] text-muted-foreground">/ {nodes.length}</span>
+            </div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Running VMs</div>
+            <div className="flex items-baseline gap-1.5">
+              <Monitor className="w-3 h-3 text-muted-foreground self-center" />
+              <span className="text-lg font-semibold text-foreground">{runningVMs}</span>
+            </div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Running LXC</div>
+            <div className="flex items-baseline gap-1.5">
+              <Box className="w-3 h-3 text-muted-foreground self-center" />
+              <span className="text-lg font-semibold text-foreground">{runningLXCs}</span>
+            </div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Last Sync</div>
+            <div className="text-xs text-foreground font-medium">{lastProviderSync ? moment(lastProviderSync).fromNow() : 'Never'}</div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sync Errors</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-lg font-semibold ${syncErrors.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>{syncErrors.length}</span>
+            </div>
+          </div>
+          <div className="bg-card px-3 py-2">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Cluster</div>
+            <div className="text-xs text-foreground font-medium truncate">{connectedProviders[0]?.cluster_name || '—'}</div>
           </div>
         </div>
       </div>
@@ -181,11 +261,12 @@ export default function OperationsCenter() {
         <div className="px-3 py-2.5 border-b border-border">
           <h2 className="text-xs font-semibold text-foreground">Quick Actions</h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-3">
           {[
             { label: 'New Asset', path: '/assets?action=new', icon: Server },
             { label: 'New Case', path: '/cases?action=new', icon: AlertTriangle },
             { label: 'New Project', path: '/projects?action=new', icon: FolderKanban },
+            { label: 'New Provider', path: '/providers?action=new', icon: Cloud },
             { label: 'New Doc', path: '/documentation?action=new', icon: null },
             { label: 'New Runbook', path: '/runbooks?action=new', icon: null },
           ].map((a) => {

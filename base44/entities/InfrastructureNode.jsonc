@@ -1,0 +1,57 @@
+{
+  "name": "InfrastructureNode",
+  "type": "object",
+  "properties": {
+    "node_name": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "InfrastructureProvider"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Online",
+        "Offline",
+        "Unknown"
+      ],
+      "default": "Unknown"
+    },
+    "cpu_usage": {
+      "type": "number"
+    },
+    "memory_usage": {
+      "type": "number"
+    },
+    "storage_usage": {
+      "type": "number"
+    },
+    "running_vms": {
+      "type": "number",
+      "default": 0
+    },
+    "running_lxcs": {
+      "type": "number",
+      "default": 0
+    },
+    "cpu_count": {
+      "type": "number"
+    },
+    "memory_total": {
+      "type": "number"
+    },
+    "storage_total": {
+      "type": "number"
+    },
+    "last_sync": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "node_name",
+    "provider"
+  ]
+}

@@ -83,6 +83,36 @@
     },
     "notes": {
       "type": "string"
+    },
+    "vmid": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "InfrastructureProvider"
+    },
+    "node": {
+      "type": "string"
+    },
+    "power_state": {
+      "type": "string",
+      "enum": [
+        "Running",
+        "Stopped",
+        "Paused",
+        "Unknown"
+      ],
+      "default": "Unknown"
+    },
+    "cpu_allocation": {
+      "type": "number"
+    },
+    "ram_allocation": {
+      "type": "number"
+    },
+    "disk_allocation": {
+      "type": "number"
     }
   },
   "required": [

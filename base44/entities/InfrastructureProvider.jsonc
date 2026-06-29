@@ -1,0 +1,96 @@
+{
+  "name": "InfrastructureProvider",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "provider_type": {
+      "type": "string",
+      "enum": [
+        "Proxmox VE",
+        "Docker",
+        "Authentik",
+        "Nginx Proxy Manager",
+        "Pi-hole",
+        "Proxmox Backup Server",
+        "pfSense"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Connected",
+        "Disconnected",
+        "Error",
+        "Unknown"
+      ],
+      "default": "Unknown"
+    },
+    "health": {
+      "type": "string",
+      "enum": [
+        "Healthy",
+        "Warning",
+        "Error",
+        "Unknown"
+      ],
+      "default": "Unknown"
+    },
+    "api_url": {
+      "type": "string"
+    },
+    "api_token_id": {
+      "type": "string"
+    },
+    "api_secret": {
+      "type": "string"
+    },
+    "ignore_ssl": {
+      "type": "boolean",
+      "default": false
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false
+    },
+    "last_sync": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_sync_duration": {
+      "type": "number"
+    },
+    "sync_imported_count": {
+      "type": "number",
+      "default": 0
+    },
+    "sync_updated_count": {
+      "type": "number",
+      "default": 0
+    },
+    "sync_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cluster_name": {
+      "type": "string"
+    },
+    "proxmox_version": {
+      "type": "string"
+    },
+    "node_count": {
+      "type": "number",
+      "default": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "provider_type"
+  ]
+}

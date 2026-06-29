@@ -25,6 +25,9 @@ import RunbookList from '@/pages/RunbookList';
 import RunbookDetail from '@/pages/RunbookDetail';
 import Monitoring from '@/pages/Monitoring';
 import SettingsPage from '@/pages/SettingsPage';
+import Providers from '@/pages/Providers';
+import Nodes from '@/pages/Nodes';
+import Topology from '@/pages/Topology';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -68,6 +71,9 @@ const AuthenticatedApp = () => {
           <Route path="/documentation/:id" element={<DocumentationDetail />} />
           <Route path="/runbooks" element={<RunbookList />} />
           <Route path="/runbooks/:id" element={<RunbookDetail />} />
+          <Route path="/providers" element={<Providers />} />
+          <Route path="/nodes" element={<Nodes />} />
+          <Route path="/topology" element={<Topology />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

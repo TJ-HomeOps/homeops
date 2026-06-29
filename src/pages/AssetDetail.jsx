@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Server, ArrowLeft, Edit, Trash2, Save, Link2, Activity, FileText, BookOpen, AlertTriangle, Cpu } from 'lucide-react';
+import { Server, ArrowLeft, Edit, Trash2, Save, Link2, Activity, FileText, BookOpen, AlertTriangle, Cpu, Cloud, Power, MemoryStick, HardDrive, Zap } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import HealthBadge from '@/components/shared/HealthBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
+import ProviderHealthBadge from '@/components/providers/ProviderHealthBadge';
 import AssetForm from '@/components/assets/AssetForm';
 import AssetTimeline from '@/components/assets/AssetTimeline';
 import RelatedAssets from '@/components/assets/RelatedAssets';
 import FutureIntegrations from '@/components/assets/FutureIntegrations';
+import FutureOperations from '@/components/assets/FutureOperations';
 import { logActivity } from '@/lib/activityLogger';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -44,6 +46,7 @@ export default function AssetDetail() {
   const [allAssets, setAllAssets] = useState([]);
   const [project, setProject] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [provider, setProvider] = useState(null);
   const [cases, setCases] = useState([]);
   const [docs, setDocs] = useState([]);
   const [runbooks, setRunbooks] = useState([]);
@@ -57,10 +60,11 @@ export default function AssetDetail() {
 
   const loadData = async () => {
     setLoading(true);
-    const [a, allProj, allAssets] = await Promise.all([
+    const [a, allProj, allAssets, allProviders] = await Promise.all([
       base44.entities.Asset.get(id),
       base44.entities.Project.list(),
-      base44.entities.Asset.list()
+      base44.entities.Asset.list(),
+      base44.entities.InfrastructureProvider.list()
     ]);
     setAsset(a);
     setProjects(allProj);
@@ -72,6 +76,7 @@ export default function AssetDetail() {
     } else {
       setProject(null);
     }
+    setProvider(allProviders.find(p => p.id === a.provider) || null);
     const [c, d, r] = await Promise.all([
       base44.entities.Case.filter({ asset: id }),
       base44.entities.Documentation.filter({ related_asset: id }),
@@ -243,6 +248,65 @@ export default function AssetDetail() {
         )}
       </SectionCard>
 
+      {/* Infrastructure Section */}
+      <SectionCard title="Infrastructure" icon={Cloud}>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div>
+            <div className="text-[11px] text-muted-foreground">Provider</div>
+            {provider ? (
+              <Link to="/providers" className="text-xs text-ops-cyan hover:underline flex items-center gap-1">
+                <Cloud className="w-3 h-3" /> {provider.name}
+              </Link>
+            ) : <div className="text-xs text-foreground">—</div>}
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Node</div>
+            <div className="text-xs text-foreground font-mono">{asset.node || '—'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">VMID</div>
+            <div className="text-xs text-foreground font-mono">{asset.vmid || '—'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Power State</div>
+            {asset.power_state ? (
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border ${
+                asset.power_state === 'Running' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                asset.power_state === 'Stopped' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                'bg-gray-500/10 text-gray-400 border-gray-500/30'
+              }`}>
+                <Zap className="w-2.5 h-2.5" /> {asset.power_state}
+              </span>
+            ) : <div className="text-xs text-foreground">—</div>}
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">CPU Allocation</div>
+            <div className="text-xs text-foreground flex items-center gap-1">
+              <Cpu className="w-3 h-3 text-muted-foreground" />
+              {asset.cpu_allocation ? `${asset.cpu_allocation} vCPU` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Memory Allocation</div>
+            <div className="text-xs text-foreground flex items-center gap-1">
+              <MemoryStick className="w-3 h-3 text-muted-foreground" />
+              {asset.ram_allocation ? `${asset.ram_allocation} GB` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Disk Allocation</div>
+            <div className="text-xs text-foreground flex items-center gap-1">
+              <HardDrive className="w-3 h-3 text-muted-foreground" />
+              {asset.disk_allocation ? `${asset.disk_allocation} GB` : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground">Provider Health</div>
+            {provider ? <ProviderHealthBadge health={provider.health} /> : <div className="text-xs text-foreground">—</div>}
+          </div>
+        </div>
+      </SectionCard>
+
       {/* Health Section */}
       <SectionCard title="Health" icon={Activity}>
         <div className="flex items-center gap-4">
@@ -265,6 +329,12 @@ export default function AssetDetail() {
       {/* Future Integrations */}
       <SectionCard title="Future Integrations" icon={Cpu}>
         <FutureIntegrations />
+      </SectionCard>
+
+      {/* Future Operations */}
+      <SectionCard title="Future Operations" icon={Power}>
+        <div className="text-[11px] text-muted-foreground mb-2">Infrastructure actions will be available in a future Voyage.</div>
+        <FutureOperations />
       </SectionCard>
 
       {/* Two-column layout */}
