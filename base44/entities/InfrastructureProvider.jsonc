@@ -54,7 +54,22 @@
       "type": "boolean",
       "default": false
     },
+    "sync_mode": {
+      "type": "string",
+      "enum": [
+        "Disabled",
+        "Every 5 Minutes",
+        "Every 15 Minutes",
+        "Every Hour",
+        "Daily"
+      ],
+      "default": "Disabled"
+    },
     "last_sync": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_successful_sync": {
       "type": "string",
       "format": "date-time"
     },

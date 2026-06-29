@@ -1,0 +1,64 @@
+{
+  "name": "InfrastructureEvent",
+  "type": "object",
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "provider_name": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "Info",
+        "Warning",
+        "Error",
+        "Critical"
+      ],
+      "default": "Info"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "Asset Imported",
+        "Asset Updated",
+        "Asset Archived",
+        "Node Offline",
+        "Node Online",
+        "Sync Started",
+        "Sync Finished",
+        "Sync Failed",
+        "Config Changed",
+        "Change Detected"
+      ]
+    },
+    "asset": {
+      "type": "string"
+    },
+    "asset_name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "change_type": {
+      "type": "string"
+    },
+    "old_value": {
+      "type": "string"
+    },
+    "new_value": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "timestamp",
+    "severity",
+    "event_type"
+  ]
+}

@@ -113,6 +113,20 @@
     },
     "disk_allocation": {
       "type": "number"
+    },
+    "archived": {
+      "type": "boolean",
+      "default": false
+    },
+    "archive_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "archive_reason": {
+      "type": "string"
+    },
+    "last_known_state": {
+      "type": "string"
     }
   },
   "required": [

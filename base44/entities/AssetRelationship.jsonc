@@ -1,0 +1,33 @@
+{
+  "name": "AssetRelationship",
+  "type": "object",
+  "properties": {
+    "source_asset": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Asset"
+    },
+    "target_asset": {
+      "type": "string",
+      "relationType": "one-to-one",
+      "relationEntity": "Asset"
+    },
+    "relationship_type": {
+      "type": "string",
+      "enum": [
+        "Depends On",
+        "Provides Service To",
+        "Hosted On",
+        "Backed Up By",
+        "Protected By",
+        "Reverse Proxied By",
+        "Authenticated By"
+      ]
+    }
+  },
+  "required": [
+    "source_asset",
+    "target_asset",
+    "relationship_type"
+  ]
+}

@@ -9,6 +9,7 @@ import {
 import StatusBadge from '@/components/shared/StatusBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import HealthGauge from '@/components/shared/HealthGauge';
+import SyncDashboard from '@/components/operations/SyncDashboard';
 import { calculateInfrastructureHealth } from '@/lib/healthCalculator';
 import moment from 'moment';
 
@@ -34,6 +35,7 @@ export default function OperationsCenter() {
   const [activities, setActivities] = useState([]);
   const [providers, setProviders] = useState([]);
   const [nodes, setNodes] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
 
@@ -45,8 +47,9 @@ export default function OperationsCenter() {
       base44.entities.ActivityLog.list('-created_date', 20),
       base44.auth.me(),
       base44.entities.InfrastructureProvider.list(),
-      base44.entities.InfrastructureNode.list()
-    ]).then(([a, p, c, act, u, prov, n]) => {
+      base44.entities.InfrastructureNode.list(),
+      base44.entities.InfrastructureEvent.list('-timestamp', 50)
+    ]).then(([a, p, c, act, u, prov, n, evt]) => {
       setAssets(a);
       setProjects(p);
       setCases(c);
@@ -54,6 +57,7 @@ export default function OperationsCenter() {
       setUser(u);
       setProviders(prov);
       setNodes(n);
+      setEvents(evt);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -190,6 +194,9 @@ export default function OperationsCenter() {
           </div>
         </div>
       </div>
+
+      {/* Synchronization Dashboard */}
+      <SyncDashboard providers={providers} events={events} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Open Cases */}

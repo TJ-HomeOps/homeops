@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Server, ArrowLeft, Edit, Trash2, Save, Link2, Activity, FileText, BookOpen, AlertTriangle, Cpu, Cloud, Power, MemoryStick, HardDrive, Zap } from 'lucide-react';
+import { Server, ArrowLeft, Edit, Trash2, Save, Link2, Activity, FileText, BookOpen, AlertTriangle, Cpu, Cloud, Power, MemoryStick, HardDrive, Zap, Archive, History, LayoutDashboard, Sparkles } from 'lucide-react';
 import StatusBadge from '@/components/shared/StatusBadge';
 import HealthBadge from '@/components/shared/HealthBadge';
 import PriorityBadge from '@/components/shared/PriorityBadge';
 import ProviderHealthBadge from '@/components/providers/ProviderHealthBadge';
 import AssetForm from '@/components/assets/AssetForm';
 import AssetTimeline from '@/components/assets/AssetTimeline';
+import AssetHistory from '@/components/assets/AssetHistory';
 import RelatedAssets from '@/components/assets/RelatedAssets';
 import FutureIntegrations from '@/components/assets/FutureIntegrations';
 import FutureOperations from '@/components/assets/FutureOperations';
+import FutureFeatures from '@/components/assets/FutureFeatures';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { logActivity } from '@/lib/activityLogger';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -55,6 +58,7 @@ export default function AssetDetail() {
   const [notesText, setNotesText] = useState('');
   const [notesDirty, setNotesDirty] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => { loadData(); }, [id]);
 
@@ -337,6 +341,11 @@ export default function AssetDetail() {
         <FutureOperations />
       </SectionCard>
 
+      {/* Future Features */}
+      <SectionCard title="Future Features" icon={Sparkles}>
+        <FutureFeatures />
+      </SectionCard>
+
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Left: Cases, Docs, Runbooks, Timeline */}
@@ -428,12 +437,10 @@ export default function AssetDetail() {
 
         {/* Right: Related Assets */}
         <div className="space-y-3">
-          <SectionCard title="Related Assets" icon={Link2} count={(asset.related_assets || []).length}>
+          <SectionCard title="Relationships" icon={Link2}>
             <RelatedAssets
               asset={asset}
               allAssets={allAssets}
-              onLink={handleLinkAsset}
-              onUnlink={handleUnlinkAsset}
             />
           </SectionCard>
         </div>

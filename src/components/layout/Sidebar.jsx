@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, Server, AlertTriangle,
   FileText, BookOpen, Activity, Settings, ChevronLeft, ChevronRight,
-  Cloud, HardDrive, Network, ListChecks, ChevronDown
+  Cloud, HardDrive, Network, ListChecks, ChevronDown, ScrollText, Ship
 } from 'lucide-react';
 
 const navSections = [
@@ -13,6 +13,7 @@ const navSections = [
       { label: 'Providers', path: '/providers', icon: Cloud },
       { label: 'Nodes', path: '/nodes', icon: HardDrive },
       { label: 'Assets', path: '/assets', icon: Server },
+      { label: 'Operations Log', path: '/operations-log', icon: ScrollText },
       { label: 'Topology', path: '/topology', icon: Network, comingSoon: true },
       { label: 'Tasks', path: '/tasks', icon: ListChecks, comingSoon: true },
     ]
@@ -22,6 +23,7 @@ const navSections = [
   { label: 'Documentation', path: '/documentation', icon: FileText },
   { label: 'Runbooks', path: '/runbooks', icon: BookOpen },
   { label: 'Monitoring', path: '/monitoring', icon: Activity },
+  { label: 'Ship Log', path: '/ship-log', icon: Ship },
   { label: 'Settings', path: '/settings', icon: Settings },
 ];
 
@@ -34,7 +36,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
     return location.pathname === path || location.pathname.startsWith(path);
   };
 
-  const isInfraActive = ['/providers', '/nodes', '/assets', '/topology', '/tasks'].some(p =>
+  const isInfraActive = ['/providers', '/nodes', '/assets', '/operations-log', '/topology', '/tasks'].some(p =>
     location.pathname === p || location.pathname.startsWith(p + '/')
   );
 

@@ -28,6 +28,8 @@ import SettingsPage from '@/pages/SettingsPage';
 import Providers from '@/pages/Providers';
 import Nodes from '@/pages/Nodes';
 import Topology from '@/pages/Topology';
+import OperationsLog from '@/pages/OperationsLog';
+import ShipLog from '@/pages/ShipLog';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -74,6 +76,8 @@ const AuthenticatedApp = () => {
           <Route path="/providers" element={<Providers />} />
           <Route path="/nodes" element={<Nodes />} />
           <Route path="/topology" element={<Topology />} />
+          <Route path="/operations-log" element={<OperationsLog />} />
+          <Route path="/ship-log" element={<ShipLog />} />
           <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

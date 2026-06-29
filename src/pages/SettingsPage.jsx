@@ -76,11 +76,15 @@ export default function SettingsPage() {
           <div className="space-y-3 py-2">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Version</span>
-              <span className="text-foreground font-medium">Voyage 3</span>
+              <span className="text-foreground font-medium">Voyage 4</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Codename</span>
-              <span className="text-foreground font-medium">Harbor Master</span>
+              <span className="text-foreground font-medium">Living Infrastructure</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Status</span>
+              <span className="text-foreground font-medium">Alpha</span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Tagline</span>

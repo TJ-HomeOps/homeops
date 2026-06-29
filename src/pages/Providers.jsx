@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Cloud, Plus, RefreshCw, Search as SearchIcon, MoreVertical, Trash2, Edit3, Server, Loader2, Plug } from 'lucide-react';
+import { Cloud, Plus, RefreshCw, Search as SearchIcon, MoreVertical, Trash2, Edit3, Server, Loader2, Plug, Settings } from 'lucide-react';
 import ProviderHealthBadge from '@/components/providers/ProviderHealthBadge';
 import ProviderForm from '@/components/providers/ProviderForm';
 import EmptyState from '@/components/shared/EmptyState';
 import StatusBadge from '@/components/shared/StatusBadge';
 import { logActivity } from '@/lib/activityLogger';
-import { testProxmoxConnection, discoverProxmoxNodes, discoverProxmoxResources } from '@/lib/proxmoxApi';
+import { testProxmoxConnection } from '@/lib/proxmoxApi';
+import { syncProvider } from '@/lib/syncEngine';
+import ProviderSyncSettings from '@/components/providers/ProviderSyncSettings';
 import moment from 'moment';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,9 +37,8 @@ export default function Providers() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [actionProvider, setActionProvider] = useState(null);
   const [syncingProvider, setSyncingProvider] = useState(null);
-  const [discoverProvider, setDiscoverProvider] = useState(null);
+  const [settingsProvider, setSettingsProvider] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
-  const [discoverResult, setDiscoverResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -78,137 +79,17 @@ export default function Providers() {
     setBusy(true);
     setSyncingProvider(provider);
     setSyncResult(null);
-    const startTime = Date.now();
-
-    const nodeResult = await discoverProxmoxNodes(provider);
-    if (!nodeResult.success) {
-      setSyncResult({ success: false, error: nodeResult.error, imported: 0, updated: 0 });
-      await base44.entities.InfrastructureProvider.update(provider.id, {
-        status: 'Error',
-        health: 'Error',
-        last_sync: new Date().toISOString(),
-        last_sync_duration: Date.now() - startTime,
-        sync_errors: [nodeResult.error],
-      });
-      setBusy(false);
-      return;
-    }
-
-    // Upsert nodes
-    const existingNodes = await base44.entities.InfrastructureNode.filter({ provider: provider.id });
-    let importedNodes = 0;
-    let updatedNodes = 0;
-    const errors = [];
-
-    for (const node of nodeResult.nodes) {
-      const existing = existingNodes.find(n => n.node_name === node.node_name);
-      if (existing) {
-        await base44.entities.InfrastructureNode.update(existing.id, {
-          ...node,
-          provider: provider.id,
-          last_sync: new Date().toISOString(),
-        });
-        updatedNodes++;
-      } else {
-        await base44.entities.InfrastructureNode.create({
-          ...node,
-          provider: provider.id,
-          last_sync: new Date().toISOString(),
-        });
-        importedNodes++;
-      }
-    }
-
-    setSyncResult({ success: true, imported: importedNodes, updated: updatedNodes, nodes: nodeResult.nodes.length });
-
-    await base44.entities.InfrastructureProvider.update(provider.id, {
-      status: 'Connected',
-      health: 'Healthy',
-      last_sync: new Date().toISOString(),
-      last_sync_duration: Date.now() - startTime,
-      sync_imported_count: importedNodes,
-      sync_updated_count: updatedNodes,
-      sync_errors: errors,
-      node_count: nodeResult.nodes.length,
-    });
-
-    await logActivity('Synchronized Provider', 'Asset', provider.id, provider.name, `Imported ${importedNodes}, Updated ${updatedNodes} nodes`, '');
+    const result = await syncProvider(provider);
+    setSyncResult(result);
+    await logActivity('Synchronized Provider', 'Asset', provider.id, provider.name,
+      result.success ? `Imported ${result.importedAssets}, Updated ${result.updatedAssets}, Archived ${result.archivedAssets}, ${result.changesDetected} changes` : `Failed: ${result.error}`, '');
     setBusy(false);
     loadData();
   };
 
-  const handleDiscover = async (provider) => {
-    setBusy(true);
-    setDiscoverProvider(provider);
-    setDiscoverResult(null);
-    const startTime = Date.now();
-
-    const resourceResult = await discoverProxmoxResources(provider);
-    if (!resourceResult.success) {
-      setDiscoverResult({ success: false, error: resourceResult.error, imported: 0, updated: 0 });
-      setBusy(false);
-      return;
-    }
-
-    const existingAssets = await base44.entities.Asset.filter({ provider: provider.id });
-    let imported = 0;
-    let updated = 0;
-    const errors = [];
-
-    for (const res of resourceResult.resources) {
-      try {
-        const existing = existingAssets.find(a => a.vmid === res.vmid && a.node === res.node);
-        if (existing) {
-          await base44.entities.Asset.update(existing.id, {
-            name: res.name,
-            type: res.type,
-            node: res.node,
-            power_state: res.power_state,
-            status: res.status,
-            cpu_allocation: res.cpu_allocation,
-            ram_allocation: res.ram_allocation,
-            disk_allocation: res.disk_allocation,
-            tags: res.tags,
-            provider: provider.id,
-          });
-          updated++;
-        } else {
-          await base44.entities.Asset.create({
-            name: res.name,
-            type: res.type,
-            hostname: res.name,
-            node: res.node,
-            vmid: res.vmid,
-            power_state: res.power_state,
-            status: res.status,
-            health: 'Healthy',
-            role: 'Infrastructure',
-            cpu_allocation: res.cpu_allocation,
-            ram_allocation: res.ram_allocation,
-            disk_allocation: res.disk_allocation,
-            tags: res.tags,
-            provider: provider.id,
-          });
-          imported++;
-        }
-      } catch (err) {
-        errors.push(`Failed to import VMID ${res.vmid}: ${err.message || err}`);
-      }
-    }
-
-    setDiscoverResult({ success: true, imported, updated, total: resourceResult.resources.length, errors });
-
-    await base44.entities.InfrastructureProvider.update(provider.id, {
-      status: 'Connected',
-      last_sync: new Date().toISOString(),
-      last_sync_duration: Date.now() - startTime,
-      sync_imported_count: imported,
-      sync_updated_count: updated,
-      sync_errors: errors,
-    });
-
-    await logActivity('Discovered Infrastructure', 'Asset', provider.id, provider.name, `Imported ${imported}, Updated ${updated} resources`, '');
-    setBusy(false);
+  const handleSaveSyncSettings = async (data) => {
+    await base44.entities.InfrastructureProvider.update(settingsProvider.id, data);
+    setSettingsProvider(null);
     loadData();
   };
 
@@ -266,6 +147,7 @@ export default function Providers() {
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Type</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Health</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Sync Mode</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Connected</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Assets</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Last Sync</th>
@@ -287,6 +169,11 @@ export default function Providers() {
                   <td className="px-3 py-2 text-muted-foreground">{p.provider_type}</td>
                   <td className="px-3 py-2"><StatusBadge status={p.status} /></td>
                   <td className="px-3 py-2"><ProviderHealthBadge health={p.health} /></td>
+                  <td className="px-3 py-2">
+                    <span className={`text-[11px] ${p.sync_mode === 'Disabled' ? 'text-muted-foreground' : 'text-ops-cyan'}`}>
+                      {p.sync_mode || 'Disabled'}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {p.last_sync ? moment(p.last_sync).fromNow() : 'Never'}
                   </td>
@@ -328,11 +215,10 @@ export default function Providers() {
                                 <RefreshCw className="w-3 h-3 mr-2" /> Synchronize Now
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => handleDiscover(p)}
-                                disabled={busy}
+                                onClick={() => setSettingsProvider(p)}
                                 className="text-xs text-foreground hover:bg-accent cursor-pointer"
                               >
-                                <Server className="w-3 h-3 mr-2" /> Discover Infrastructure
+                                <Settings className="w-3 h-3 mr-2" /> Sync Settings
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="bg-border" />
                             </>
@@ -366,20 +252,32 @@ export default function Providers() {
             </DialogHeader>
             {syncResult.success ? (
               <div className="space-y-2 text-xs">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="bg-card border border-border rounded-md p-2 text-center">
-                    <div className="text-lg font-semibold text-emerald-400">{syncResult.imported}</div>
-                    <div className="text-[10px] text-muted-foreground">Imported Nodes</div>
+                    <div className="text-lg font-semibold text-emerald-400">{syncResult.importedAssets}</div>
+                    <div className="text-[10px] text-muted-foreground">Imported</div>
                   </div>
                   <div className="bg-card border border-border rounded-md p-2 text-center">
-                    <div className="text-lg font-semibold text-sky-400">{syncResult.updated}</div>
-                    <div className="text-[10px] text-muted-foreground">Updated Nodes</div>
+                    <div className="text-lg font-semibold text-sky-400">{syncResult.updatedAssets}</div>
+                    <div className="text-[10px] text-muted-foreground">Updated</div>
                   </div>
                   <div className="bg-card border border-border rounded-md p-2 text-center">
-                    <div className="text-lg font-semibold text-foreground">{syncResult.nodes}</div>
-                    <div className="text-[10px] text-muted-foreground">Total Nodes</div>
+                    <div className="text-lg font-semibold text-amber-400">{syncResult.archivedAssets}</div>
+                    <div className="text-[10px] text-muted-foreground">Archived</div>
+                  </div>
+                  <div className="bg-card border border-border rounded-md p-2 text-center">
+                    <div className="text-lg font-semibold text-foreground">{syncResult.changesDetected}</div>
+                    <div className="text-[10px] text-muted-foreground">Changes</div>
                   </div>
                 </div>
+                {syncResult.errors?.length > 0 && (
+                  <div className="text-xs text-amber-400 bg-amber-500/5 border border-amber-500/30 rounded-md p-2">
+                    <div className="font-medium mb-1">{syncResult.errors.length} error(s):</div>
+                    <ul className="space-y-0.5">
+                      {syncResult.errors.slice(0, 5).map((e, i) => <li key={i} className="text-[11px] text-muted-foreground">• {e}</li>)}
+                    </ul>
+                  </div>
+                )}
                 <Button onClick={() => { setSyncResult(null); setSyncingProvider(null); }} className="w-full h-8 text-xs bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90">
                   Done
                 </Button>
@@ -398,54 +296,17 @@ export default function Providers() {
         </Dialog>
       )}
 
-      {/* Discover Result Dialog */}
-      {discoverResult && (
-        <Dialog open={true} onOpenChange={() => { setDiscoverResult(null); setDiscoverProvider(null); }}>
+      {/* Sync Settings Dialog */}
+      {settingsProvider && (
+        <Dialog open={true} onOpenChange={() => setSettingsProvider(null)}>
           <DialogContent className="bg-navy-800 border-border sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-sm font-semibold flex items-center gap-2">
-                <Server className="w-4 h-4 text-ops-cyan" />
-                Discovery Result — {discoverProvider?.name}
+                <RefreshCw className="w-4 h-4 text-ops-cyan" />
+                Sync Settings — {settingsProvider.name}
               </DialogTitle>
             </DialogHeader>
-            {discoverResult.success ? (
-              <div className="space-y-2 text-xs">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-card border border-border rounded-md p-2 text-center">
-                    <div className="text-lg font-semibold text-emerald-400">{discoverResult.imported}</div>
-                    <div className="text-[10px] text-muted-foreground">Imported</div>
-                  </div>
-                  <div className="bg-card border border-border rounded-md p-2 text-center">
-                    <div className="text-lg font-semibold text-sky-400">{discoverResult.updated}</div>
-                    <div className="text-[10px] text-muted-foreground">Updated</div>
-                  </div>
-                  <div className="bg-card border border-border rounded-md p-2 text-center">
-                    <div className="text-lg font-semibold text-foreground">{discoverResult.total}</div>
-                    <div className="text-[10px] text-muted-foreground">Discovered</div>
-                  </div>
-                </div>
-                {discoverResult.errors?.length > 0 && (
-                  <div className="text-xs text-amber-400 bg-amber-500/5 border border-amber-500/30 rounded-md p-2">
-                    <div className="font-medium mb-1">{discoverResult.errors.length} error(s):</div>
-                    <ul className="space-y-0.5">
-                      {discoverResult.errors.slice(0, 5).map((e, i) => <li key={i} className="text-[11px] text-muted-foreground">• {e}</li>)}
-                    </ul>
-                  </div>
-                )}
-                <Button onClick={() => { setDiscoverResult(null); setDiscoverProvider(null); }} className="w-full h-8 text-xs bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90">
-                  Done
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-xs text-red-400 bg-red-500/5 border border-red-500/30 rounded-md p-2.5">
-                  {discoverResult.error}
-                </div>
-                <Button onClick={() => { setDiscoverResult(null); setDiscoverProvider(null); }} variant="outline" className="w-full h-8 text-xs border-border">
-                  Close
-                </Button>
-              </div>
-            )}
+            <ProviderSyncSettings provider={settingsProvider} onSave={handleSaveSyncSettings} />
           </DialogContent>
         </Dialog>
       )}

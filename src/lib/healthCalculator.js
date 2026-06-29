@@ -24,3 +24,47 @@ export function healthLabel(health) {
   if (health >= 25) return 'Warning';
   return 'Critical';
 }
+
+const SYNC_INTERVAL_MINUTES = {
+  'Every 5 Minutes': 5,
+  'Every 15 Minutes': 15,
+  'Every Hour': 60,
+  'Daily': 1440,
+};
+
+export function calculateProviderHealth(provider, providerNodes) {
+  if (!provider) return 'Unknown';
+  if (provider.status === 'Error') return 'Error';
+  if (provider.status !== 'Connected') return 'Unknown';
+
+  let score = 100;
+
+  if (provider.sync_errors && provider.sync_errors.length > 0) {
+    score -= 20;
+  }
+
+  if (provider.last_successful_sync) {
+    const ageMinutes = (Date.now() - new Date(provider.last_successful_sync).getTime()) / 60000;
+    const interval = SYNC_INTERVAL_MINUTES[provider.sync_mode] || 0;
+    if (interval > 0 && ageMinutes > interval * 2) {
+      score -= 30;
+    } else if (interval > 0 && ageMinutes > interval) {
+      score -= 15;
+    }
+    if (ageMinutes > 1440) {
+      score -= 20;
+    }
+  } else {
+    score -= 35;
+  }
+
+  const nodes = (providerNodes || []).filter(n => n.provider === provider.id);
+  const offlineNodes = nodes.filter(n => n.status !== 'Online');
+  if (nodes.length > 0) {
+    score -= offlineNodes.length * (15 / nodes.length) * 3;
+  }
+
+  if (score >= 80) return 'Healthy';
+  if (score >= 50) return 'Warning';
+  return 'Error';
+}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plug, CheckCircle, XCircle, Loader2, Save } from 'lucide-react';
+import { Plug, CheckCircle, XCircle, Loader2, Save, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ export default function ProviderForm({ onSubmit, onCancel }) {
     api_secret: '',
     ignore_ssl: false,
     is_default: false,
+    sync_mode: 'Disabled',
     notes: '',
   });
   const [testing, setTesting] = useState(false);
@@ -134,6 +135,25 @@ export default function ProviderForm({ onSubmit, onCancel }) {
           className="h-8 text-xs bg-navy-900 border-border font-mono"
           required
         />
+      </div>
+
+      {/* Synchronization Mode */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Synchronization Mode
+        </Label>
+        <Select value={formData.sync_mode} onValueChange={(v) => handleChange('sync_mode', v)}>
+          <SelectTrigger className="h-8 text-xs bg-navy-900 border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-navy-800 border-border">
+            <SelectItem value="Disabled" className="text-xs">Disabled</SelectItem>
+            <SelectItem value="Every 5 Minutes" className="text-xs">Every 5 Minutes</SelectItem>
+            <SelectItem value="Every 15 Minutes" className="text-xs">Every 15 Minutes</SelectItem>
+            <SelectItem value="Every Hour" className="text-xs">Every Hour</SelectItem>
+            <SelectItem value="Daily" className="text-xs">Daily</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Toggles */}
