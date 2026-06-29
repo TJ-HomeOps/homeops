@@ -1,6 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 function buildAuthHeader(tokenId, tokenSecret) {
+  // Proxmox API Token auth format: PVEAPIToken=user@realm!tokenid=secret
+  // The exclamation mark in the token ID must be preserved.
   return `PVEAPIToken=${tokenId}=${tokenSecret}`;
 }
 
@@ -9,6 +11,10 @@ function normalizeApiUrl(url) {
   let u = url.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//.test(u)) {
     u = `https://${u}`;
+  }
+  // Force HTTPS for Proxmox default port 8006
+  if (/^http:\/\//.test(u) && /:8006(\/|$)/.test(u)) {
+    u = u.replace(/^http:/, 'https:');
   }
   return u;
 }
@@ -20,9 +26,11 @@ function createFetchOptions(headers, ignoreSsl) {
       const createClient = globalThis.Deno?.createHttpClient;
       if (typeof createClient === 'function') {
         options.client = createClient({ acceptInvalidCerts: true });
+      } else {
+        console.log('[proxmoxProxy] Warning: Deno.createHttpClient not available — SSL certificates will be verified (ignore_ssl cannot be honored)');
       }
-    } catch {
-      // fall back to standard fetch
+    } catch (e) {
+      console.log('[proxmoxProxy] Warning: Failed to create HTTP client for ignore_ssl:', e.message);
     }
   }
   return options;
@@ -30,8 +38,18 @@ function createFetchOptions(headers, ignoreSsl) {
 
 async function proxmoxFetch(baseUrl, path, authHeader, ignoreSsl) {
   const url = `${baseUrl}/api2/json${path}`;
+  console.log(`[proxmoxProxy] >> Request URL: ${url}`);
+  console.log(`[proxmoxProxy] >> Auth: PVEAPIToken=${authHeader.split('=')[1] ?? ''}=*** (secret redacted)`);
   const options = createFetchOptions({ Authorization: authHeader }, ignoreSsl);
-  return fetch(url, options);
+  const res = await fetch(url, options);
+  console.log(`[proxmoxProxy] << HTTP Status: ${res.status} ${res.statusText}`);
+  return res;
+}
+
+async function readErrorBody(res) {
+  const body = await res.text().catch(() => '');
+  console.log(`[proxmoxProxy] << Response Body: ${body}`);
+  return body;
 }
 
 async function handleTestConnection(creds) {
@@ -45,24 +63,28 @@ async function handleTestConnection(creds) {
   const startTime = Date.now();
 
   try {
-    const [versionRes, clusterRes, nodesRes] = await Promise.all([
-      proxmoxFetch(baseUrl, '/version', authHeader, ignoreSsl),
-      proxmoxFetch(baseUrl, '/cluster/status', authHeader, ignoreSsl),
-      proxmoxFetch(baseUrl, '/nodes', authHeader, ignoreSsl),
-    ]);
-
+    const versionRes = await proxmoxFetch(baseUrl, '/version', authHeader, ignoreSsl);
     const latency = Date.now() - startTime;
 
     if (!versionRes.ok) {
-      if (versionRes.status === 401) return { success: false, error: 'Authentication failed. Verify your API Token ID and Secret.' };
-      if (versionRes.status === 403) return { success: false, error: 'Access denied. The API token lacks required permissions.' };
-      const body = await versionRes.text().catch(() => '');
-      return { success: false, error: `Proxmox API returned HTTP ${versionRes.status}. ${body}` };
+      const rawBody = await readErrorBody(versionRes);
+      return {
+        success: false,
+        error: `Proxmox API returned HTTP ${versionRes.status}`,
+        status: versionRes.status,
+        raw_body: rawBody,
+        latency,
+      };
     }
 
-    const versionData = await versionRes.json();
-    const clusterData = clusterRes.ok ? await clusterRes.json() : { data: [] };
-    const nodesData = nodesRes.ok ? await nodesRes.json() : { data: [] };
+    const versionBody = await readErrorBody(versionRes);
+    const versionData = JSON.parse(versionBody);
+
+    const clusterRes = await proxmoxFetch(baseUrl, '/cluster/status', authHeader, ignoreSsl);
+    const nodesRes = await proxmoxFetch(baseUrl, '/nodes', authHeader, ignoreSsl);
+
+    const clusterData = clusterRes.ok ? JSON.parse(await readErrorBody(clusterRes)) : { data: [] };
+    const nodesData = nodesRes.ok ? JSON.parse(await readErrorBody(nodesRes)) : { data: [] };
 
     const version = versionData?.data?.version || 'Unknown';
     const clusterInfo = (clusterData?.data || []).find(e => e.type === 'cluster');
@@ -72,6 +94,7 @@ async function handleTestConnection(creds) {
     return { success: true, cluster: clusterName, version, nodes: nodeCount, latency };
   } catch (err) {
     const msg = err?.message || String(err);
+    console.log(`[proxmoxProxy] Exception: ${msg}`);
     return { success: false, error: msg };
   }
 }
@@ -83,9 +106,13 @@ async function handleDiscoverNodes(provider) {
 
   try {
     const res = await proxmoxFetch(baseUrl, '/nodes', authHeader, ignoreSsl);
-    if (!res.ok) return { success: false, error: `API returned HTTP ${res.status}` };
+    if (!res.ok) {
+      const rawBody = await readErrorBody(res);
+      return { success: false, error: `Proxmox API returned HTTP ${res.status}`, status: res.status, raw_body: rawBody };
+    }
 
-    const data = await res.json();
+    const body = await readErrorBody(res);
+    const data = JSON.parse(body);
     const nodes = (data?.data || []).map(n => ({
       node_name: n.node,
       status: n.status === 'online' ? 'Online' : 'Offline',
@@ -103,7 +130,7 @@ async function handleDiscoverNodes(provider) {
       try {
         const rr = await proxmoxFetch(baseUrl, `/nodes/${node.node_name}/qemu`, authHeader, ignoreSsl);
         if (rr.ok) {
-          const rd = await rr.json();
+          const rd = JSON.parse(await readErrorBody(rr));
           node.running_vms = (rd?.data || []).filter(v => v.status === 'running').length;
         }
       } catch { }
@@ -111,7 +138,7 @@ async function handleDiscoverNodes(provider) {
       try {
         const lr = await proxmoxFetch(baseUrl, `/nodes/${node.node_name}/lxc`, authHeader, ignoreSsl);
         if (lr.ok) {
-          const ld = await lr.json();
+          const ld = JSON.parse(await readErrorBody(lr));
           node.running_lxcs = (ld?.data || []).filter(c => c.status === 'running').length;
         }
       } catch { }
@@ -120,6 +147,7 @@ async function handleDiscoverNodes(provider) {
     return { success: true, nodes };
   } catch (err) {
     const msg = err?.message || String(err);
+    console.log(`[proxmoxProxy] Exception: ${msg}`);
     return { success: false, error: msg };
   }
 }
@@ -131,9 +159,13 @@ async function handleDiscoverResources(provider) {
 
   try {
     const res = await proxmoxFetch(baseUrl, '/cluster/resources', authHeader, ignoreSsl);
-    if (!res.ok) return { success: false, error: `API returned HTTP ${res.status}` };
+    if (!res.ok) {
+      const rawBody = await readErrorBody(res);
+      return { success: false, error: `Proxmox API returned HTTP ${res.status}`, status: res.status, raw_body: rawBody };
+    }
 
-    const data = await res.json();
+    const body = await readErrorBody(res);
+    const data = JSON.parse(body);
     const resources = (data?.data || [])
       .filter(r => r.type === 'qemu' || r.type === 'lxc')
       .map(r => ({
@@ -152,6 +184,7 @@ async function handleDiscoverResources(provider) {
     return { success: true, resources };
   } catch (err) {
     const msg = err?.message || String(err);
+    console.log(`[proxmoxProxy] Exception: ${msg}`);
     return { success: false, error: msg };
   }
 }
@@ -164,6 +197,8 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { action, provider_id, config } = body;
+
+    console.log(`[proxmoxProxy] Action: ${action}, provider_id: ${provider_id || '(none)'}`);
 
     if (!action) return Response.json({ error: 'Action is required' }, { status: 400 });
 
@@ -193,6 +228,7 @@ Deno.serve(async (req) => {
 
     return Response.json(result);
   } catch (error) {
+    console.log(`[proxmoxProxy] Handler exception: ${error.message || error}`);
     return Response.json({ error: error.message || String(error) }, { status: 500 });
   }
 });

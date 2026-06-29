@@ -195,7 +195,12 @@ export default function ProviderForm({ onSubmit, onCancel }) {
               <div><span className="text-muted-foreground">Latency:</span> <span className="text-foreground font-mono">{testResult.latency}ms</span></div>
             </div>
           ) : (
-            <div className="text-muted-foreground">{testResult.error}</div>
+            <div className="space-y-1">
+              <div className="text-muted-foreground">{testResult.error}</div>
+              {testResult.raw_body && (
+                <div className="text-[11px] text-red-400/70 font-mono break-all">{testResult.raw_body}</div>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -284,8 +284,11 @@ export default function Providers() {
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="text-xs text-red-400 bg-red-500/5 border border-red-500/30 rounded-md p-2.5">
-                  {syncResult.error}
+                <div className="space-y-1 text-xs text-red-400 bg-red-500/5 border border-red-500/30 rounded-md p-2.5">
+                  <div>{syncResult.error}</div>
+                  {syncResult.raw_body && (
+                    <div className="text-[11px] text-red-400/70 font-mono break-all">{syncResult.raw_body}</div>
+                  )}
                 </div>
                 <Button onClick={() => { setSyncResult(null); setSyncingProvider(null); }} variant="outline" className="w-full h-8 text-xs border-border">
                   Close
