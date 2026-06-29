@@ -122,22 +122,6 @@ export default function AssetDetail() {
     setNotesDirty(false);
   };
 
-  const handleLinkAsset = async (assetId) => {
-    const updated = [...(asset.related_assets || []), assetId];
-    await base44.entities.Asset.update(id, { related_assets: updated });
-    const linkedAsset = allAssets.find(a => a.id === assetId);
-    await logActivity(`Linked Asset: ${linkedAsset?.name || ''}`, 'Asset', id, asset.name, '', id);
-    loadData();
-  };
-
-  const handleUnlinkAsset = async (assetId) => {
-    const updated = (asset.related_assets || []).filter(aid => aid !== assetId);
-    await base44.entities.Asset.update(id, { related_assets: updated });
-    const unlinkedAsset = allAssets.find(a => a.id === assetId);
-    await logActivity(`Unlinked Asset: ${unlinkedAsset?.name || ''}`, 'Asset', id, asset.name, '', id);
-    loadData();
-  };
-
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" /></div>;
   }
@@ -176,6 +160,11 @@ export default function AssetDetail() {
               {asset.role && <span className="text-[11px] text-muted-foreground">· {asset.role}</span>}
               <StatusBadge status={asset.status} />
               <HealthBadge health={asset.health} />
+              {asset.archived && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border bg-amber-500/15 text-amber-400 border-amber-500/30">
+                  <Archive className="w-2.5 h-2.5" /> Archived
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -205,246 +194,291 @@ export default function AssetDetail() {
         </div>
       </div>
 
-      {/* General Section */}
-      <SectionCard title="General" icon={Server}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div>
-            <div className="text-[11px] text-muted-foreground">Hostname</div>
-            <div className="text-xs text-foreground font-mono">{asset.hostname || '—'}</div>
+      {/* Archived Banner */}
+      {asset.archived && (
+        <div className="bg-amber-500/5 border border-amber-500/30 rounded-lg p-3 flex items-center gap-3">
+          <Archive className="w-5 h-5 text-amber-400 shrink-0" />
+          <div className="flex-1">
+            <div className="text-xs font-semibold text-amber-400">This asset has been archived</div>
+            <div className="text-[11px] text-muted-foreground">
+              {asset.archive_reason || 'Asset no longer found on provider'}
+              {asset.archive_date && ` · Archived ${moment(asset.archive_date).format('MMM D, YYYY')}`}
+            </div>
           </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">IP Address</div>
-            <div className="text-xs text-foreground font-mono">{asset.ip_address || '—'}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Role</div>
-            <div className="text-xs text-foreground">{asset.role || 'Other'}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Project</div>
-            {project ? (
-              <Link to={`/projects/${project.id}`} className="text-xs text-primary hover:underline">{project.name}</Link>
-            ) : (
-              <div className="text-xs text-foreground">—</div>
+          {asset.last_known_state && (
+            <details className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer hover:text-foreground">Last known state</summary>
+              <pre className="mt-1 p-2 bg-card rounded text-[10px] overflow-x-auto">{asset.last_known_state}</pre>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-card border border-border">
+          <TabsTrigger value="overview" className="text-xs data-[state=active]:bg-accent">
+            <LayoutDashboard className="w-3 h-3 mr-1" /> Overview
+          </TabsTrigger>
+          <TabsTrigger value="history" className="text-xs data-[state=active]:bg-accent">
+            <History className="w-3 h-3 mr-1" /> History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-3 mt-3">
+          {/* General Section */}
+          <SectionCard title="General" icon={Server}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <div className="text-[11px] text-muted-foreground">Hostname</div>
+                <div className="text-xs text-foreground font-mono">{asset.hostname || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">IP Address</div>
+                <div className="text-xs text-foreground font-mono">{asset.ip_address || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Role</div>
+                <div className="text-xs text-foreground">{asset.role || 'Other'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Project</div>
+                {project ? (
+                  <Link to={`/projects/${project.id}`} className="text-xs text-primary hover:underline">{project.name}</Link>
+                ) : (
+                  <div className="text-xs text-foreground">—</div>
+                )}
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Created</div>
+                <div className="text-xs text-foreground">{moment(asset.created_date).format('MMM D, YYYY')}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Last Updated</div>
+                <div className="text-xs text-foreground">{moment(asset.updated_date || asset.created_date).fromNow()}</div>
+              </div>
+            </div>
+            {asset.description && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <div className="text-[11px] text-muted-foreground mb-0.5">Description</div>
+                <div className="text-xs text-foreground">{asset.description}</div>
+              </div>
             )}
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Created</div>
-            <div className="text-xs text-foreground">{moment(asset.created_date).format('MMM D, YYYY')}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Last Updated</div>
-            <div className="text-xs text-foreground">{moment(asset.updated_date || asset.created_date).fromNow()}</div>
-          </div>
-        </div>
-        {asset.description && (
-          <div className="mt-3 pt-3 border-t border-border">
-            <div className="text-[11px] text-muted-foreground mb-0.5">Description</div>
-            <div className="text-xs text-foreground">{asset.description}</div>
-          </div>
-        )}
-        {asset.tags && asset.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {asset.tags.map(tag => (
-              <span key={tag} className="px-1.5 py-0.5 rounded bg-accent text-[11px] text-foreground border border-border">{tag}</span>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+            {asset.tags && asset.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {asset.tags.map(tag => (
+                  <span key={tag} className="px-1.5 py-0.5 rounded bg-accent text-[11px] text-foreground border border-border">{tag}</span>
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
-      {/* Infrastructure Section */}
-      <SectionCard title="Infrastructure" icon={Cloud}>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div>
-            <div className="text-[11px] text-muted-foreground">Provider</div>
-            {provider ? (
-              <Link to="/providers" className="text-xs text-ops-cyan hover:underline flex items-center gap-1">
-                <Cloud className="w-3 h-3" /> {provider.name}
-              </Link>
-            ) : <div className="text-xs text-foreground">—</div>}
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Node</div>
-            <div className="text-xs text-foreground font-mono">{asset.node || '—'}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">VMID</div>
-            <div className="text-xs text-foreground font-mono">{asset.vmid || '—'}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Power State</div>
-            {asset.power_state ? (
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border ${
-                asset.power_state === 'Running' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                asset.power_state === 'Stopped' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
-                'bg-gray-500/10 text-gray-400 border-gray-500/30'
-              }`}>
-                <Zap className="w-2.5 h-2.5" /> {asset.power_state}
-              </span>
-            ) : <div className="text-xs text-foreground">—</div>}
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">CPU Allocation</div>
-            <div className="text-xs text-foreground flex items-center gap-1">
-              <Cpu className="w-3 h-3 text-muted-foreground" />
-              {asset.cpu_allocation ? `${asset.cpu_allocation} vCPU` : '—'}
+          {/* Infrastructure Section */}
+          <SectionCard title="Infrastructure" icon={Cloud}>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div>
+                <div className="text-[11px] text-muted-foreground">Provider</div>
+                {provider ? (
+                  <Link to="/providers" className="text-xs text-ops-cyan hover:underline flex items-center gap-1">
+                    <Cloud className="w-3 h-3" /> {provider.name}
+                  </Link>
+                ) : <div className="text-xs text-foreground">—</div>}
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Node</div>
+                <div className="text-xs text-foreground font-mono">{asset.node || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">VMID</div>
+                <div className="text-xs text-foreground font-mono">{asset.vmid || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Power State</div>
+                {asset.power_state ? (
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border ${
+                    asset.power_state === 'Running' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                    asset.power_state === 'Stopped' ? 'bg-red-500/10 text-red-400 border-red-500/30' :
+                    'bg-gray-500/10 text-gray-400 border-gray-500/30'
+                  }`}>
+                    <Zap className="w-2.5 h-2.5" /> {asset.power_state}
+                  </span>
+                ) : <div className="text-xs text-foreground">—</div>}
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">CPU Allocation</div>
+                <div className="text-xs text-foreground flex items-center gap-1">
+                  <Cpu className="w-3 h-3 text-muted-foreground" />
+                  {asset.cpu_allocation ? `${asset.cpu_allocation} vCPU` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Memory Allocation</div>
+                <div className="text-xs text-foreground flex items-center gap-1">
+                  <MemoryStick className="w-3 h-3 text-muted-foreground" />
+                  {asset.ram_allocation ? `${asset.ram_allocation} GB` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Disk Allocation</div>
+                <div className="text-xs text-foreground flex items-center gap-1">
+                  <HardDrive className="w-3 h-3 text-muted-foreground" />
+                  {asset.disk_allocation ? `${asset.disk_allocation} GB` : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">Provider Health</div>
+                {provider ? <ProviderHealthBadge health={provider.health} /> : <div className="text-xs text-foreground">—</div>}
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Memory Allocation</div>
-            <div className="text-xs text-foreground flex items-center gap-1">
-              <MemoryStick className="w-3 h-3 text-muted-foreground" />
-              {asset.ram_allocation ? `${asset.ram_allocation} GB` : '—'}
+          </SectionCard>
+
+          {/* Health Section */}
+          <SectionCard title="Health" icon={Activity}>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">Status</div>
+                  <StatusBadge status={asset.status} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">Health</div>
+                  <HealthBadge health={asset.health} />
+                </div>
+              </div>
+              <div className="flex-1 text-xs text-muted-foreground border-l border-border pl-3">
+                {healthDescription}
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Disk Allocation</div>
-            <div className="text-xs text-foreground flex items-center gap-1">
-              <HardDrive className="w-3 h-3 text-muted-foreground" />
-              {asset.disk_allocation ? `${asset.disk_allocation} GB` : '—'}
-            </div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted-foreground">Provider Health</div>
-            {provider ? <ProviderHealthBadge health={provider.health} /> : <div className="text-xs text-foreground">—</div>}
-          </div>
-        </div>
-      </SectionCard>
+          </SectionCard>
 
-      {/* Health Section */}
-      <SectionCard title="Health" icon={Activity}>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="text-[11px] text-muted-foreground mb-0.5">Status</div>
-              <StatusBadge status={asset.status} />
-            </div>
-            <div>
-              <div className="text-[11px] text-muted-foreground mb-0.5">Health</div>
-              <HealthBadge health={asset.health} />
-            </div>
-          </div>
-          <div className="flex-1 text-xs text-muted-foreground border-l border-border pl-3">
-            {healthDescription}
-          </div>
-        </div>
-      </SectionCard>
+          {/* Future Integrations */}
+          <SectionCard title="Future Integrations" icon={Cpu}>
+            <FutureIntegrations />
+          </SectionCard>
 
-      {/* Future Integrations */}
-      <SectionCard title="Future Integrations" icon={Cpu}>
-        <FutureIntegrations />
-      </SectionCard>
+          {/* Future Operations */}
+          <SectionCard title="Future Operations" icon={Power}>
+            <div className="text-[11px] text-muted-foreground mb-2">Infrastructure actions will be available in a future Voyage.</div>
+            <FutureOperations />
+          </SectionCard>
 
-      {/* Future Operations */}
-      <SectionCard title="Future Operations" icon={Power}>
-        <div className="text-[11px] text-muted-foreground mb-2">Infrastructure actions will be available in a future Voyage.</div>
-        <FutureOperations />
-      </SectionCard>
+          {/* Future Features */}
+          <SectionCard title="Future Features" icon={Sparkles}>
+            <FutureFeatures />
+          </SectionCard>
 
-      {/* Future Features */}
-      <SectionCard title="Future Features" icon={Sparkles}>
-        <FutureFeatures />
-      </SectionCard>
+          {/* Two-column layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Left: Cases, Docs, Runbooks, Timeline */}
+            <div className="lg:col-span-2 space-y-3">
+              {/* Cases */}
+              <SectionCard title="Cases" icon={AlertTriangle} count={cases.length}>
+                {cases.length === 0 ? (
+                  <div className="text-xs text-muted-foreground text-center py-4">No cases for this asset</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-1.5 font-medium text-muted-foreground">Priority</th>
+                          <th className="text-left py-1.5 font-medium text-muted-foreground">Case #</th>
+                          <th className="text-left py-1.5 font-medium text-muted-foreground">Title</th>
+                          <th className="text-left py-1.5 font-medium text-muted-foreground">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {cases.map(c => (
+                          <tr key={c.id} className="hover:bg-accent/30">
+                            <td className="py-1.5"><PriorityBadge priority={c.priority} /></td>
+                            <td className="py-1.5 font-mono text-muted-foreground">{c.case_number}</td>
+                            <td className="py-1.5"><Link to={`/cases/${c.id}`} className="text-foreground hover:text-primary">{c.title}</Link></td>
+                            <td className="py-1.5"><StatusBadge status={c.status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </SectionCard>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Left: Cases, Docs, Runbooks, Timeline */}
-        <div className="lg:col-span-2 space-y-3">
-          {/* Cases */}
-          <SectionCard title="Cases" icon={AlertTriangle} count={cases.length}>
-            {cases.length === 0 ? (
-              <div className="text-xs text-muted-foreground text-center py-4">No cases for this asset</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-1.5 font-medium text-muted-foreground">Priority</th>
-                      <th className="text-left py-1.5 font-medium text-muted-foreground">Case #</th>
-                      <th className="text-left py-1.5 font-medium text-muted-foreground">Title</th>
-                      <th className="text-left py-1.5 font-medium text-muted-foreground">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {cases.map(c => (
-                      <tr key={c.id} className="hover:bg-accent/30">
-                        <td className="py-1.5"><PriorityBadge priority={c.priority} /></td>
-                        <td className="py-1.5 font-mono text-muted-foreground">{c.case_number}</td>
-                        <td className="py-1.5"><Link to={`/cases/${c.id}`} className="text-foreground hover:text-primary">{c.title}</Link></td>
-                        <td className="py-1.5"><StatusBadge status={c.status} /></td>
-                      </tr>
+              {/* Documentation */}
+              <SectionCard title="Documentation" icon={FileText} count={docs.length}>
+                {docs.length === 0 ? (
+                  <div className="text-xs text-muted-foreground text-center py-4">No documentation for this asset</div>
+                ) : (
+                  <div className="space-y-1">
+                    {docs.map(d => (
+                      <Link key={d.id} to={`/documentation/${d.id}`} className="block px-2 py-1.5 rounded-md bg-accent/20 border border-border hover:border-primary/30 transition-colors">
+                        <div className="text-xs text-foreground font-medium">{d.title}</div>
+                        <div className="text-[10px] text-muted-foreground">{moment(d.updated_date || d.created_date).format('MMM D, YYYY')}</div>
+                      </Link>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                )}
+              </SectionCard>
+
+              {/* Runbooks */}
+              <SectionCard title="Runbooks" icon={BookOpen} count={runbooks.length}>
+                {runbooks.length === 0 ? (
+                  <div className="text-xs text-muted-foreground text-center py-4">No runbooks for this asset</div>
+                ) : (
+                  <div className="space-y-1">
+                    {runbooks.map(r => (
+                      <Link key={r.id} to={`/runbooks/${r.id}`} className="block px-2 py-1.5 rounded-md bg-accent/20 border border-border hover:border-primary/30 transition-colors">
+                        <div className="text-xs text-foreground font-medium">{r.name}</div>
+                        {r.description && <div className="text-[10px] text-muted-foreground">{r.description}</div>}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
+
+              {/* Activity Timeline */}
+              <SectionCard title="Activity Timeline" icon={Activity}>
+                <AssetTimeline assetId={id} />
+              </SectionCard>
+
+              {/* Notes */}
+              <SectionCard title="Notes" icon={FileText}
+                action={notesDirty && (
+                  <Button onClick={handleSaveNotes} size="sm" disabled={savingNotes}
+                    className="h-6 text-[11px] bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90 px-2">
+                    <Save className="w-3 h-3 mr-1" /> {savingNotes ? 'Saving...' : 'Save'}
+                  </Button>
+                )}
+              >
+                <Textarea
+                  value={notesText}
+                  onChange={(e) => { setNotesText(e.target.value); setNotesDirty(true); }}
+                  placeholder="Add internal notes for this asset..."
+                  className="text-xs bg-navy-900 border-border min-h-[80px] resize-y"
+                />
+              </SectionCard>
+            </div>
+
+            {/* Right: Relationships */}
+            <div className="space-y-3">
+              <SectionCard title="Relationships" icon={Link2}>
+                <RelatedAssets asset={asset} allAssets={allAssets} />
+              </SectionCard>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-3">
+          <div className="bg-card border border-border rounded-lg">
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+              <div className="flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-muted-foreground" />
+                <h3 className="text-xs font-semibold text-foreground">Infrastructure History</h3>
               </div>
-            )}
-          </SectionCard>
-
-          {/* Documentation */}
-          <SectionCard title="Documentation" icon={FileText} count={docs.length}>
-            {docs.length === 0 ? (
-              <div className="text-xs text-muted-foreground text-center py-4">No documentation for this asset</div>
-            ) : (
-              <div className="space-y-1">
-                {docs.map(d => (
-                  <Link key={d.id} to={`/documentation/${d.id}`} className="block px-2 py-1.5 rounded-md bg-accent/20 border border-border hover:border-primary/30 transition-colors">
-                    <div className="text-xs text-foreground font-medium">{d.title}</div>
-                    <div className="text-[10px] text-muted-foreground">{moment(d.updated_date || d.created_date).format('MMM D, YYYY')}</div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-
-          {/* Runbooks */}
-          <SectionCard title="Runbooks" icon={BookOpen} count={runbooks.length}>
-            {runbooks.length === 0 ? (
-              <div className="text-xs text-muted-foreground text-center py-4">No runbooks for this asset</div>
-            ) : (
-              <div className="space-y-1">
-                {runbooks.map(r => (
-                  <Link key={r.id} to={`/runbooks/${r.id}`} className="block px-2 py-1.5 rounded-md bg-accent/20 border border-border hover:border-primary/30 transition-colors">
-                    <div className="text-xs text-foreground font-medium">{r.name}</div>
-                    {r.description && <div className="text-[10px] text-muted-foreground">{r.description}</div>}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-
-          {/* Activity Timeline */}
-          <SectionCard title="Activity Timeline" icon={Activity}>
-            <AssetTimeline assetId={id} />
-          </SectionCard>
-
-          {/* Notes */}
-          <SectionCard title="Notes" icon={FileText}
-            action={notesDirty && (
-              <Button onClick={handleSaveNotes} size="sm" disabled={savingNotes}
-                className="h-6 text-[11px] bg-ops-cyan text-navy-900 hover:bg-ops-cyan/90 px-2">
-                <Save className="w-3 h-3 mr-1" /> {savingNotes ? 'Saving...' : 'Save'}
-              </Button>
-            )}
-          >
-            <Textarea
-              value={notesText}
-              onChange={(e) => { setNotesText(e.target.value); setNotesDirty(true); }}
-              placeholder="Add internal notes for this asset..."
-              className="text-xs bg-navy-900 border-border min-h-[80px] resize-y"
-            />
-          </SectionCard>
-        </div>
-
-        {/* Right: Related Assets */}
-        <div className="space-y-3">
-          <SectionCard title="Relationships" icon={Link2}>
-            <RelatedAssets
-              asset={asset}
-              allAssets={allAssets}
-            />
-          </SectionCard>
-        </div>
-      </div>
+            </div>
+            <div className="p-3">
+              <AssetHistory assetId={id} />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="bg-navy-800 border-border sm:max-w-lg">
